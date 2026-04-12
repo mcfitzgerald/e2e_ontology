@@ -523,68 +523,159 @@ Read directly from the axiom body's `on_failure_route_to` field. The LLM then re
 
 ---
 
-## 12. Context management as the ontology scales
+## 12. Context management — from POC stuffing to enterprise production
 
-The current POC relies on **whole-schema context stuffing**: feed `ontology_primer.md` + `core.yaml` + `supply_chain_demo.yaml` into the LLM's context window on every query. This works at the current scale (~300 lines of actual content) and was empirically validated at ~3000 lines via `pcg.yaml`. The question this section addresses is what to do when the ontology grows past the point where stuffing is viable — whether the binding constraint becomes token budget, coherence degradation, or per-query cost.
+The current POC feeds the entire ontology (`ontology_primer.md` + `core.yaml` + `supply_chain_demo.yaml`) into the LLM's context window on every query. This is the right default *now*, was empirically validated at ~3000 lines via `pcg.yaml`, and will remain the right default for a meaningful set of usage patterns even at enterprise scale (see §12.2). But the question *"what do we do when this breaks?"* is the wrong framing. The right question is *"what shape of access do different consumers actually need, and how do we get there from here without boxing ourselves in?"*
 
-**The spectrum of options,** ordered roughly from simplest to most sophisticated:
+This section lays out the thinking so that the POC decisions in §12.7 have a clear rationale and the enterprise-production path is forward-compatibly preserved.
 
-### 12.1 Whole-schema context stuffing — the current approach
+### 12.1 The real axes — context window size is the least interesting one
 
-Feed everything, every query. Simple, robust, proven. Breaks down when (a) the ontology exceeds the available context window, (b) signal-to-noise degrades with scale (the LLM misses details in a long document), or (c) per-query cost becomes a constraint in production.
+When production pressure eventually forces a move off whole-schema stuffing for some use cases, the driver is almost never literal context overflow. Frontier models have enough headroom that even 10× the current ontology fits comfortably. The axes that actually bind are:
 
-### 12.2 Modular loading via domain tags
+- **Cost.** Production orchestration running at transaction-scale can't afford to feed ~20K tokens on every call. Per-transaction workloads hit cost-prohibitive well before they hit context-length limits.
+- **Latency.** Each stuffed call adds processing time that a synchronous orchestrator might not have.
+- **Coherence.** Long contexts degrade on dense, cross-referenced content. `pcg.yaml`'s ~3000 lines works empirically; we should not assume 30K lines works equally well, and certainly not linearly.
+- **Debuggability.** Tool calls produce transcripts of "what did the agent ask for and what did it get" — a YAML blob in context does not. Production incidents will want the transcript.
 
-Tag every class with `scont:domain` and `scont:subdomain` (as `pcg.yaml` already does). The consumer loads only the files or sections relevant to the current query. Works well for domain-scoped questions, degrades at cross-domain boundaries (which is a non-trivial fraction of supply-chain questions). Cheap to add; does not eliminate the context-stuffing step, just reduces its payload.
+Frame any architecture decision around these axes, not around context window size. Context window size is the last binding constraint, not the first.
 
-### 12.3 Exploder as a callable tool
+### 12.2 Hot path vs cold path — the foundational distinction
+
+The ontology has **two fundamentally different usage modes**, each with its own architectural sweet spot. These are not alternatives; they coexist on the same ontology artifact.
+
+**Cold path** — development, debugging, design review, demo, schema authoring and evolution, exploratory LLM reasoning about the ontology itself. Characteristics: *infrequent, panoramic (often cross-domain), cost-insensitive, latency-insensitive.* **Whole-schema context stuffing stays the default here indefinitely.** The cost is trivial when the frequency is low, the reasoning is high-value, and the agent needs full cross-domain visibility to catch design issues or explain intent. There is no migration off stuffing for the cold path, ever.
+
+**Hot path** — runtime orchestration decisions during production. *"Does this handoff pass its gates? What flow fires next? What's the recovery?"* Characteristics: *frequent (transaction-rate), narrow (one question per call), latency-sensitive, cost-sensitive.* **This is where targeted access — tool calls, query APIs, staged retrieval — pays off.** The hot path is where production pressure lives, and it's where the §12.3 spectrum earns its keep.
+
+This framing dissolves a false choice. We are not "migrating off stuffing as the ontology grows." We are going to keep stuffing for the cold path forever *and* build targeted access for the hot path when production materializes. Same ontology artifact, two access patterns, no migration event.
+
+### 12.3 The spectrum of hot-path options
+
+For the hot path, ordered from simplest to most sophisticated:
+
+#### 12.3.1 Modular loading via domain tags
+
+Tag every class with `scont:domain` and `scont:subdomain` (already done across the expanded demo). The consumer filters to the relevant subset before loading. Works well for domain-scoped questions; degrades at cross-domain boundaries — a meaningful fraction of supply-chain questions span domains.
+
+**Important nuance: annotations-as-domain are cheap; files-as-domain are expensive.** Annotations give you filter-based benefits without calcifying domain boundaries. Splitting into files (`procurement.yaml`, `fulfillment.yaml`) buys versioning independence at the cost of making every cross-domain flow a file-boundary negotiation. The POC should stick with annotations until an *organizational* pressure (separate teams owning separate sections, independent release cadence, merge-conflict fatigue) justifies the split. `pcg.yaml` is 3020 lines in a single file with domain annotations — strong evidence for "annotations first, files only if you must."
+
+#### 12.3.2 Exploder as a callable tool
 
 Expose `exploder.py` as an agent-callable tool with query-shaped methods:
 
-- `get_flow(name) -> Flow`
-- `list_flows_where(source_role=..., target_role=..., quantum=...) -> list[Flow]`
-- `get_axioms_for(class_or_flow_name) -> list[Axiom]`
-- `resolve_role(name) -> Role`
-- `find_flows_triggered_by(event_name) -> list[Flow]`
-- `traverse_state_machine(fsm_name, from_state) -> list[Transition]`
-- `evaluate_axiom(axiom_name, instance_data) -> bool` (via `expr` when possible, LLM fallback for `nl`)
+- `get_flow(name) → Flow`
+- `list_flows_where(source_role=..., target_role=..., quantum=...) → list[Flow]`
+- `get_axioms_for(class_or_flow_name) → list[Axiom]`
+- `resolve_role(name) → Role`
+- `find_flows_triggered_by(event_name) → list[Flow]`
+- `traverse_state_machine(fsm_name, from_state) → list[Transition]`
+- `evaluate_axiom(axiom_name, instance_data) → bool`
 
-The agent queries the ontology the way it queries any other structured tool; only the results enter its context. The ontology itself never touches the LLM prompt. **This is the most mechanical approach and the one with the best scale characteristics** — the full ontology can live on disk, not in any context window.
+The agent queries the ontology the way it queries any other structured tool; only the results enter its context. The ontology itself never touches the LLM prompt on the hot path.
 
-### 12.4 Staged retrieval — table of contents plus on-demand detail
+**The exploder is already the proto-tool.** Its current Python API is one step away from a tool interface. The query methods above are worth adding to the exploder *regardless* of whether they are ever wrapped as an LLM-callable tool — they're the shape of the orchestrator-side read API (§13.3) for any consumer, LLM or otherwise. Every method added moves us closer to production-readiness without committing to a specific consumption architecture.
 
-A lightweight index (manifest of all classes grouped by type, one-line descriptions, cross-reference summary) is always loaded up front. Full definitions are fetched on demand via tool calls. Hybrid of 12.1 and 12.3. The "table of contents" stays in context; details are retrieved when needed. Preserves cross-domain reasoning while bounding per-query payload.
+#### 12.3.3 Staged retrieval — manifest plus on-demand detail
 
-### 12.5 Explorer agents — delegated ontology navigation
+A lightweight manifest (every class name, one-line description, type, domain tag) stays in context permanently. Full definitions are fetched on demand via tool calls. Hybrid of whole-stuffing and pure tool-calling: the table of contents stays in context; details arrive when asked for. Preserves cross-domain reasoning while bounding per-query payload.
 
-A dedicated sub-agent whose job is to traverse and distill the ontology. The main orchestrator asks the explorer questions like *"for this demand signal, what's the feasible path and what are the gates?"* The explorer reads the ontology (via its own context window or tool-based access), reasons over it, and returns a distilled answer. The orchestrator never sees raw ontology; it sees the explorer's findings. Highest engineering cost, highest separation of concerns, best for multi-agent architectures where different agents need different distillations of the same ontology.
+This is not the third option in a menu — **it is probably the right default hot-path answer for most production cases.** Cheaper than stuffing, more coherent than pure tool calling, and it solves the paradox described in §12.5.
+
+#### 12.3.4 Explorer agents — delegated ontology navigation
+
+A dedicated sub-agent whose only job is to traverse and distill the ontology for the main orchestrator. The orchestrator asks *"for this demand signal, what's the feasible path and what are the gates?"* The explorer reads the ontology (via its own context or via tool calls to the exploder), reasons, and returns a distilled answer. The orchestrator never sees raw ontology.
+
+Makes sense when the **consumer ecosystem** has many agents with *different distillation needs* — planning asks "what's feasible?", procurement asks "what's blocked?", audit asks "who approved this and when?" A single explorer that understands the ontology deeply and serves distilled answers to multiple consumers is the cleanest abstraction for a multi-agent production system.
+
+**The exploder is the backend; the explorer agent is a frontend you put in front of it when you need to.** The exploder doesn't change when you add an explorer agent — you're adding a ~200-line LLM wrapper that translates NL queries into exploder calls. Nothing earlier has to be rebuilt.
+
+### 12.4 These approaches compose — they are not alternatives
+
+The §12.3 subsections look like a menu. They are not. Modularity (annotations or files), tool calling (exploder API), staged retrieval (manifest), and explorer agents (LLM wrapper) **stack cleanly**. A mature production system uses all of them simultaneously:
+
+```
+LLM query
+   ↓
+Explorer agent (NL → query plan)
+   ↓
+Exploder query API (structured read access)
+   ↓
+Domain-filtered access (annotations drive selection)
+   ↓
+Underlying LinkML schema (single file or imports)
+```
+
+The question is not "which approach?" It is "**which layer to build first**," and that depends on which of the §12.1 axes first forces the shift. For the POC, the answer is "none of the hot-path layers — cold-path stuffing is fine and the exploder's query API is the forward-compatible thing we build anyway."
+
+### 12.5 The paradox of pure tool calling — and how to solve it
+
+There is a real paradox in exploder-as-tool: **to query the ontology well via a tool, the LLM has to know *what to ask*. But knowing what to ask requires knowing what's in the ontology** — which is exactly what whole-schema stuffing gives you and what pure tool calling is supposed to replace.
+
+Two ways out:
+
+1. **Keep a lightweight manifest in context permanently** (staged retrieval, §12.3.3). A table of contents — every class name, one-line description, type, domain tag. The LLM plans queries against the manifest; the exploder returns detail on demand. Roughly 10% of the full ontology's token weight at current scale. This is why §12.3.3 is probably the production default.
+2. **Expose browse methods on the exploder** — `list_all_flows()`, `list_classes_by_domain()`, `describe_class()`. The LLM takes a couple of exploratory calls before planning the real query. Works without a pre-loaded manifest but trades a few tool calls for context weight. Reasonable when the LLM is stateful across a session.
+
+Regardless of which path: **the primer always stays in context.** It tells the LLM *how to read* the ontology — `instantiates:` dispatch, the JSON-in-string convention, navigation recipes, semantic rules. Primer cost is bounded (~75 lines, ~1K tokens) and does not grow with the ontology. You never remove it.
+
+The mental model for hot-path context is three layers, each at a different resolution and cost profile:
+
+| Layer | What's in it | Approx size (current / enterprise) | Frequency |
+|---|---|---|---|
+| Always-in-context primer | How to read the ontology | ~75 lines / ~75 lines | Every call |
+| Hot-path manifest | What exists (index) | ~30 lines / ~500–2000 lines | Every call |
+| On-demand detail | Specific flows, axioms, FSMs | Variable (~10–100 lines per tool call) | Per query |
 
 ### 12.6 Tradeoffs at a glance
 
-| Approach | Latency | Cost per query | Cross-domain reasoning | Agent complexity |
-|---|---|---|---|---|
-| 12.1 Whole stuffing | Fast (1 call) | High (full schema every time) | Excellent | Trivial |
-| 12.2 Modular loading | Fast | Medium (subset every time) | Degraded at boundaries | Low |
-| 12.3 Exploder-as-tool | Slower (multi-call) | Low (only what's fetched) | Requires planning | Medium |
-| 12.4 Staged retrieval | Medium | Low–medium | Good (index keeps frame) | Medium |
-| 12.5 Explorer agents | Slower (agent-in-agent) | Low (explorer distills) | Excellent (explorer plans) | High |
+| Approach | Latency | Cost per query | Cross-domain reasoning | Agent complexity | Dev/debug friendliness |
+|---|---|---|---|---|---|
+| Whole stuffing (**cold-path default, forever**) | Fast (1 call) | High per call / low frequency | Excellent | Trivial | Excellent |
+| Whole stuffing + domain-annotation filtering | Fast | Lower (subset load) | Degraded at boundaries | Low | Excellent |
+| Exploder as callable tool | Slower (multi-call) | Low (fetch what you ask) | Requires query planning | Medium | Good (tool transcripts) |
+| Staged retrieval (manifest + detail) | Medium | Low–medium | Good (manifest holds frame) | Medium | Good |
+| Explorer agents | Slower (agent-in-agent) | Low (explorer distills) | Excellent (explorer plans) | High | Weaker (two contexts) |
 
-### 12.7 Design decisions for the POC
+### 12.7 The opinionated POC track
 
-- **Stay on 12.1 for now.** The ontology is small, the pattern is proven, and premature optimization would hide real design bugs.
-- **Design forward-compatibly for 12.2 and 12.3.** Specifically:
-  - Add `scont:domain` / `scont:subdomain` annotations to classes in the expanded demo. Cheap, no cost at current scale, enables later modularization by filter.
-  - Keep the exploder's public API clean and query-shaped. Every method it gains should be something an agent-callable tool would plausibly expose. When the time comes to wrap it as a tool, it should be a thin shim.
-- **Do not build 12.3 / 12.4 / 12.5 yet.** Each is its own project. We do not yet know which scale regime we'll end up in, and the right answer may be different for development vs. production, for single-agent vs. multi-agent architectures, and for narrow vs. cross-domain queries.
+Aggressively conservative for now, forward-compatible for enterprise production. The goal is to deliberately avoid premature optimization while making sure nothing we do now paints us into a corner later.
 
-### 12.8 Triggers to re-evaluate
+1. **Keep whole-schema stuffing as the dev/debug / cold path indefinitely.** It is already working, the primer is already designed for it, and it is how we will continue to author, validate, debug, and demo the ontology. There is **no migration off stuffing** for the cold path. The question is only what the hot path looks like, and we do not need a hot path yet.
 
-Revisit this section and pick from the spectrum when any of the following hits:
+2. **Build the exploder's query API** as part of direction 4 (the orchestrator-side read API — see §13.3). Not because we need scale yet, but because the query API is useful *right now* for any non-LLM programmatic consumer, *and* it's the forward-compatible substrate for every later hot-path option. Every method added to the exploder pays off immediately as a Python API and stays useful when we eventually wrap it as a tool.
 
-- The ontology approaches ~10,000 lines total (order of magnitude above current).
-- LLM reasoning degrades on whole-schema queries (coherence loss, hallucinated fields, missed cross-references).
-- Per-query cost or latency becomes a constraint in a demo or production setting.
-- An orchestrator we're building for needs structured query access rather than raw ontology context.
+3. **Do not split the ontology into files.** Keep `scont:domain` annotations across all elements (already done this session). Files cost calcification; annotations don't. Revisit file splitting only when organizational pressure (separate ownership, independent release cadence, merge-conflict fatigue) appears — not before.
+
+4. **Leave staged retrieval and explorer agents in the "later" drawer.** Document the shape they would take (done — §12.3.3 and §12.3.4) so a future engineer knows what to build when the time comes, but do not commit code. Each is a real project that should materialize only when an actual hot-path use case drives the requirements.
+
+### 12.8 Build order, forward-compatibly
+
+Given the POC track, the concrete build order:
+
+| Step | Status | Notes |
+|---|---|---|
+| `scont:domain` / `scont:subdomain` annotations on every element | ✅ Done this session | Forward-compatible with modular loading and manifest generation |
+| Exploder query API (`get_flow`, `list_flows_where`, …) | Upcoming in direction 4 | Useful immediately as Python API; forward-compatible with tool wrapping |
+| Manifest generator in the exploder | When a hot path materializes | Writes the table-of-contents index for staged retrieval |
+| Exploder wrapped as an LLM-callable tool | When cost / latency demands it on a real consumer | Thin shim over the existing API |
+| Explorer agent | Only when the consumer ecosystem has multiple agents with different distillation needs | ~200-line LLM wrapper; nothing earlier has to change |
+| File-level modular split | Only under organizational pressure | Not driven by tech; driven by team ownership |
+
+Each step is independently valuable and none requires rework of earlier steps. That's what "forward-compatibly" means in practice.
+
+### 12.9 Triggers to re-evaluate
+
+Revisit this section when any of the following hits — and do not act before one of them does:
+
+- **Cost** becomes a constraint — per-transaction workload at a rate that makes stuffed-context calls prohibitive.
+- **Latency** becomes a constraint — synchronous orchestration where the stuffing overhead exceeds the budget.
+- **Coherence** degrades — the LLM starts hallucinating or missing cross-references on whole-schema queries as the ontology grows.
+- **Debuggability** demands structured transcripts — production incidents where "what did the agent see?" matters more than development flexibility.
+- **Multi-consumer ecosystem** emerges — many agents with different distillation needs. This is when explorer agents start earning their keep.
+- **Organizational pressure** — separate teams needing to own separate sections of the ontology independently.
+
+Context window size, by itself, is **not** on this list. It is the least interesting axis and almost never the first constraint to bind.
 
 ---
 
