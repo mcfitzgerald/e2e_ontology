@@ -1,6 +1,6 @@
 # Initial Design Draft — Supply Chain Ontology POC
 
-**Status:** POC foundation in place and validated. Format choice (LinkML) validated. Extension pattern refined against `pcg.yaml` and **proven empirically** — the de-risking spike (§10) passed all three LLM-reasoning questions cleanly on first run, with the LLM exhibiting deeper cross-reference traversal than required (see §11). Ontology, exploder, and primer all exist and work end-to-end.
+**Status:** POC foundation in place and validated. Format choice (LinkML) validated. Extension pattern refined against `pcg.yaml` and **proven empirically** — the de-risking spike (§10) passed all three LLM-reasoning questions cleanly on first run, with the LLM exhibiting deeper cross-reference traversal than required (see §11). Ontology, exploder, and primer all exist and work end-to-end. Meta-model extended (session 3) with boundary roles (§3.1), query-flow clarification (§3.3), human-involvement pattern (§3.7), and two reasoning modes (§4). Demo scenario chosen: promo whiplash (see `demo_narrative.md`, linked from §7).
 **Purpose:** Memorialize the brainstorming session's conclusions, record what we learned from the spike, and capture forward-looking concerns so we can resume with shared context and avoid re-litigating settled points.
 
 ---
@@ -51,6 +51,8 @@ Beyond classes, slots, and enums (which LinkML already gives us), the ontology i
 ### 3.1 Role
 
 A logical actor that entities can fulfill. `demand_planning`, `procurement`, `inbound_dock`. Flows bind to roles, not concrete entity types, so handoffs are reusable across any entity that can play a given role. Roles are the abstraction that lets the orchestrator reason about handoffs without hardcoded point-to-point routing.
+
+**Boundary roles.** Some roles represent *external* participants — functions outside the supply chain that send signals in or receive signals out. Commercial/trade (source of promo commitments), co-manufacturers (recipients of volume shifts), regulatory bodies, finance. The ontology declares boundary roles as thin shells — a description and `llm_prompt_hint` are usually enough — so flows that cross the SC boundary can name them as source or target. The ontology does not model boundary roles' internals; that is outside its scope. This pattern is how external signals enter the ontology's reasoning surface without forcing us to model the external function, and it generalizes to any cross-boundary signal source (customer orders from sales, cost targets from finance, regulatory changes from legal). A role is marked as a boundary role via an `is_boundary: true` field in its `scont:role` annotation body.
 
 ### 3.2 Event
 
@@ -109,6 +111,10 @@ Usually they move in lockstep. But they can diverge (retries, orchestrator-initi
 
 Enforcement is schematic: a flow **must** have a quantum, a trigger, and a direction. If you can't name those, you have a relation, not a flow. The exploder catches this trivially.
 
+#### Query flows vs handoff flows — not an ontology distinction
+
+Some flows transfer responsibility from source to target (a *handoff*: procurement hands a PO off to supplier_management). Others are request-response: an agent asks another role a question and *retains* responsibility (supply_planning asks logistics_planning for an OTIF exposure calculation and uses the answer in its own decision). We considered distinguishing these at the schema level and decided not to. The ontology's job is to declare that a flow exists between two roles, carrying a quantum of a given type. Whether the source agent fires-and-forgets or waits for a response is *agent execution semantics*, not ontology structure — same category as "synchronous vs. asynchronous" or "REST vs. gRPC." The `llm_prompt_hint` on the flow and the shape of the quantum convey the interaction pattern to the consuming agent. If this proves insufficient, a `flow_mode: handoff | query` annotation is a one-line backward-compatible addition — but the POC does not need it.
+
 ### 3.4 Axiom
 
 A statement that must be true, scoped to a class or a flow (the two forms of Logical layer attachment — a class invariant describes what the thing must *be*; a flow invariant describes what a handoff must *respect*). Axioms live as annotations on the class or flow they apply to, not in a separate top-level block. See §4 for notation and §6.1 for the class-centric realization.
@@ -129,6 +135,33 @@ Every element — class, slot, flow, event, axiom, metric — can carry:
 - **`llm_prompt_hint`**: a per-element hint written specifically to guide LLM navigation of *that element* — its quirks, join patterns, traversal semantics, gotchas, common misreadings to avoid. Adopted from the `pcg.yaml` convention, where it is load-bearing for LLM reasoning over the ontology. Every concept the LLM might have to reason about should carry one.
 
 This is the substrate for future self-healing (agents propose diffs as `status: proposed` with full provenance) and for change management more broadly. Context is cross-cutting rather than a layer because it applies everywhere and would duplicate if modeled as a layer.
+
+### 3.7 Human involvement — where humans enter the agent loop
+
+The ontology declares which roles and situations may require human input; the orchestrator decides when and how. This hybrid split was chosen after weighing framework conventions against workflow-specification conventions.
+
+- Agent frameworks (LangGraph, CrewAI, AutoGen, Google ADK) uniformly treat human-in-the-loop as a runtime/framework-level concern (interrupts, `human_input=True`, `UserProxyAgent`, callback hooks). Domain models don't participate.
+- Workflow specification standards (BPMN `UserTask`, CMMN discretionary tasks, DMN decision tables) make the locus of human involvement a first-class element of the process definition — the *where* is domain knowledge; only the *how* (assignment, UI, notification, SLA) is runtime.
+- The human-agent teaming literature (Sheridan, Parasuraman on Levels of Automation) argues explicitly against runtime-only autonomy boundaries: if the system decides at runtime when to involve humans based on confidence scores alone, boundaries become unpredictable and erode trust. The envelope of permissible autonomy should be declared at design time.
+
+For this ontology, the workflow-specification side wins. Execs need to know in advance which decisions the system makes autonomously versus which surface to a human. That is design-time domain knowledge — ontology content — not runtime policy.
+
+**The split:**
+
+- **Ontology declares (domain truth):**
+  - Which roles may require a human actor — via a `human_involvement: required | conditional | autonomous` field in the `scont:role` annotation body.
+  - What context an agent should assemble before surfacing a decision — expressed through *query flows* connecting the role to affected domains (see §3.3).
+  - What resolution flows are available — the options the human or agent chooses between.
+
+- **Orchestrator owns (execution semantics):**
+  - How to reach the human (UI, Slack, email, Teams).
+  - Autonomy thresholds (financial exposure > $X → always escalate; below $Y with a single clear path → resolve autonomously).
+  - SLA timers, timeout policies, escalation ladders.
+  - Confidence-based fallbacks.
+
+Structurally, escalation to a human is identical to any other flow routing. The ontology does not care whether a role is played by an agent or a human — it declares a role, flows connect roles, and the orchestrator binds roles to actors at runtime. This preserves the ontology's neutrality toward orchestration specifics and mirrors BPMN's `UserTask` pattern: the declaration lives in the process definition; task assignment and notification are the engine's concern.
+
+The annotation is deliberately minimal for POC — one enum field on the role body. Richer shapes (explicit escalation criteria, decision-surface templates) can be added when a real orchestrator's needs inform them. The behavioral richness lives in the role's `llm_prompt_hint`, which describes how the agent-in-role should assemble context and present a decision surface when escalation is indicated.
 
 ---
 
@@ -170,6 +203,18 @@ See §6.1 for how a list of axiom bodies attaches to a class or flow (via a JSON
 - Two-tier keeps simple invariants in pure native LinkML (full validator + Pydantic compilation) while routing flow-scoped and complex axioms through the annotation form.
 - `nl:` is the form that survives schema refactors — it degrades gracefully where `expr:` breaks.
 - Python-native matters; CEL was considered and rejected (alien to Python devs, mediocre embedding ergonomics).
+
+### Two reasoning modes — how agents consume axioms
+
+Axioms and their surrounding flows support two distinct reasoning modes. Both use the same ontology surface; what differs is the agent's behavior.
+
+**Mode 1 — Hard gates.** A blocking axiom fires, its `on_failure_route_to` declares the recovery flow, and the agent follows that route without judgment. `respect_lead_time` is the canonical example: a required-by date inside supplier lead time is unambiguously infeasible, and the routing to `replan_on_infeasible_request` is predetermined. No cross-domain context is needed — the axiom body has everything. Deterministic, autonomous.
+
+**Mode 2 — Context assembly for judgment calls.** Some conflicts have no predetermined resolution. A line capacity conflict during a promo surge could resolve via co-manufacturer shift, promo renegotiation, accepting OTIF penalties, or reducing promo volume — and the right answer depends on cross-domain context (OTIF exposure at the affected retailer, co-man availability, promo commitment status). Here the ontology does not declare *the* resolution. It declares *what context an agent needs to gather and from whom* — expressed through query flows (§3.3) from the mediating role (typically a supply/netops role) to each affected domain. The consuming agent reads the connected flows, queries each domain, assembles quantified trade-offs using declared metrics, and then either resolves autonomously (when the orchestrator's autonomy policy permits) or presents the decision surface to a human (§3.7). The LLM provides judgment; the ontology provides the information architecture for the decision.
+
+Both modes are first-class. The POC demo (§7) exercises both: a `line_capacity_not_exceeded` axiom as a hard gate, followed by context assembly at `supply_planning` to resolve the trade-off. The axiom still fires deterministically; what happens next is where the two modes diverge.
+
+The practical implication for ontology authoring: axioms that point to a single unambiguous recovery declare `on_failure_route_to`. Axioms that open into a judgment space — typically when multiple functions are affected — route to a mediating role whose `human_involvement` annotation and `llm_prompt_hint` describe the context-assembly pattern.
 
 ---
 
@@ -398,34 +443,23 @@ The exploder is a small Python module that reads the LinkML YAML, walks classes,
 
 ## 7. Demonstration scope
 
-Two slices chosen to prove the ontology earns its keep on both the structural and behavioral axes.
+**Authoritative content plan:** [`demo_narrative.md`](./demo_narrative.md). This section captures the meta-level criteria the demo must satisfy; the narrative specifies the concrete roles, flows, axioms, entities, and story beats. The two documents have different scopes — this design draft specifies the ontology's language and mechanism; the narrative specifies the content we're writing with it.
 
-### Slice 1 — Happy path: demand → procurement
+### Meta-level criteria the demo must satisfy
 
-```
-demand anomaly detected
-  → demand planning revises forecast
-  → submit_procurement_request flow fires
-  → ProcurementRequest quantum moves draft → submitted
-  → procurement consumes the quantum, drafts a PO
-```
+- **Cross-domain.** The demo must exercise agents navigating at least three supply chain functions (demand, supply/netops, manufacturing, procurement, logistics, customer service) plus at least one boundary role. A single-domain relay does not demonstrate the ontology's value.
+- **Both reasoning modes.** The demo must exercise both hard-gate axioms (§4 / Mode 1) and context-assembly flows with a mediating role (§4 / Mode 2), so the ontology's full reasoning surface is visible.
+- **Both autonomy levels.** The demo must exercise autonomous resolution (agent follows `on_failure_route_to` without human input) and assisted resolution (agent assembles context, surfaces decision to a human). §3.7 is the mechanism.
+- **Realistic for the target vertical.** The POC targets CPG oral/personal/home care (model: P&G, Colgate). The narrative is grounded in that vertical's actual coordination failures so it lands with execs who know these pains.
+- **Live execution.** Agents running against this ontology must be able to complete the scenario end-to-end. The orchestrator and agents are a separate build; this ontology is their source of truth. That raises the precision bar: every role, flow, axiom, and `llm_prompt_hint` must be accurate enough that an agent reading it cold makes correct routing decisions.
 
-Proves: the ontology serves as a handoff contract across functional domains; roles, flows, and quanta compose cleanly.
+### Chosen scenario — promo whiplash
 
-### Slice 2 — Unhappy path: disruption → replan
+A retailer BOGO commitment (Walmart, Product A) enters the supply chain via S&OP alignment from a `customer_development` boundary role. Demand planning revises the forecast and hands off to supply/netops, which assigns production to a specific plant and line. Manufacturing detects that the promo volume collides with a standing commitment for Product B on the same line — total demand at 120% of capacity — and a `line_capacity_not_exceeded` axiom fires (hard gate). Supply/netops receives the escalation and assembles cross-domain context via query flows: OTIF exposure at Target from `logistics_planning`, promo flexibility from `customer_development`, co-manufacturer availability from a `co_manufacturing` boundary role. The assembled decision surface is either resolved autonomously or surfaced to a human planner depending on the orchestrator's autonomy policy; in the scripted demo path the resolution is a co-manufacturer shift for Product B, freeing the internal line for the promo volume while preserving Target's OTIF commitment.
 
-```
-procurement drafts a PO
-  → axiom `respect_lead_time` fires: required_by inside supplier lead time (blocking)
-  → replan_on_infeasible_request flow fires
-  → ReplanRequest quantum routes back to demand planning
-```
+Spans five SC functions plus two boundary roles. Exercises both reasoning modes and both autonomy levels. Full beat-by-beat and content inventory in `demo_narrative.md`.
 
-Proves: **the Logical layer catches a bad handoff the orchestrator couldn't have known about on its own**. This is the single most compelling demo moment — an axiom stops the agent from doing a dumb thing, and a second flow defines the recovery path, all read from the ontology without the orchestrator "knowing" anything ahead of time.
-
-Both slices share the `ProcurementRequest` quantum, so slice 2 reuses slice 1's ontology surface. Disproportionate narrative payoff for low incremental cost.
-
-**Executive framing:** "autonomous bullwhip prevention" — a demand signal triggers procurement action, the ontology enforces feasibility, and a cross-functional handoff happens without human-in-the-loop for the common case.
+**Executive framing:** "A promo commitment hit a capacity wall. Within minutes, agents across five functions assembled the full cross-domain impact — OTIF exposure at Target, co-manufacturer availability, promo flexibility with Walmart — with quantified trade-offs. A human planner saw the complete picture and made the call. No one built a dashboard for this scenario. The ontology declared the domains, the constraints, and the information the decision-maker needs; the agents navigated it. That's what an autonomous supply chain looks like — not replacing human judgment, but making sure every decision has complete, cross-functional context in minutes instead of days."
 
 ---
 
@@ -683,18 +717,13 @@ Context window size, by itself, is **not** on this list. It is the least interes
 
 With the spike passed and the POC foundation in place, the remaining directions split into two tracks: **finishing the demo** (so we have an exec-ready narrative) and **productizing the pattern** (so the ontology can live beyond a single demo).
 
-### 13.1 Expand the demo ontology toward the full narrative
+### 13.1 Expand the demo ontology toward the promo whiplash narrative
 
 *Direction 2 from the spike-completion options.*
 
-The current demo has two flows and one axiom — enough to prove the pattern, not enough to tell the "autonomous bullwhip prevention" story. Expansion should add:
+Session 2 delivered the first phase (supporting entities, Tier-1 rules example, MetricFlow-shaped metric, third flow completing the forward chain). The next phase expands toward the promo whiplash narrative (§7 / `demo_narrative.md`): adding `supply_planning`, `production_planning`, `logistics_planning` as internal roles; `customer_development` and `co_manufacturing` as boundary roles; the handoff flows that carry the signal through the loop; the query flows that supply/netops uses to assemble cross-domain context; a `line_capacity_not_exceeded` hard-gate axiom; and the supporting entities (`TradePromotion`, `SupplyRequest`, `ProductionRequest`, `CapacityConflict`, `OTIFExposure`, `ProductionLine`, `RetailerCommitment`). Full inventory in `demo_narrative.md`.
 
-- **Supporting entities** the axiom references (Supplier with lead_time_days, SKU, PurchaseOrder).
-- **A Tier-1 native `rules:` example** to demonstrate the dual axiom strategy in the demo, not just the design draft.
-- **One or two metrics** to show the MetricFlow-compatible shape in practice.
-- **A third flow** that completes the forward chain — something like `submit_po_to_supplier` (procurement → supplier_management), carrying a PurchaseOrder quantum. This gives the demo a three-step narrative: demand sense → procurement action → supplier transmission.
-
-Bounded — stays under ~300 lines of YAML, still readable in one sitting. Expansion has begun in this session (see CHANGELOG).
+Likely size after expansion: ~800–1200 lines of YAML. Still readable in one sitting, still a single file. Precision bar is high — agents in a separate orchestrator build will consume this cold.
 
 ### 13.2 Harden the exploder
 
