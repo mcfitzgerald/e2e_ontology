@@ -1,0 +1,106 @@
+# ============================================================================
+# core.yaml — Supply Chain Ontology: meta-class documentation shells
+# ============================================================================
+#
+# This is the reusable substrate for the supply chain ontology POC. It declares
+# the lightweight meta-classes that concrete ontology elements will reference
+# via `instantiates:` tags. Concrete schemas import this file.
+#
+# Design notes:
+#   - Meta-classes here are DOCUMENTATION SHELLS. They carry descriptions so
+#     that anyone (human or LLM) reading a class tagged `instantiates: [scont:X]`
+#     can resolve what X means. They do NOT declare enforced slots — real
+#     shape validation lives in exploder.py.
+#   - `instantiates:` is used as a type discriminator, not as LinkML 1.6+'s
+#     enforced metaclass-extension mechanism (which isn't validated by LinkML's
+#     own validator yet).
+#   - Plain entities (Supplier, SKU, ProcurementRequest, etc.) do NOT
+#     instantiate anything here — a class with no `instantiates:` is by
+#     default a plain structural entity.
+#
+# See initial_design_draft.md §6 for the extension pattern, the JSON-in-string
+# annotation convention, and the exploder's role.
+
+id: https://e2e-ontology.dev/schemas/core
+name: core
+version: "0.1.0"
+description: >-
+  Core meta-class documentation shells for the supply chain ontology POC.
+  Declares Role, Event, Flow (+ 3 subtypes), and StateMachine as lightweight
+  tags that concrete ontology classes reference via `instantiates:`.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  scont:  https://e2e-ontology.dev/
+
+default_prefix: scont
+
+imports:
+  - linkml:types
+
+# ============================================================================
+# META-CLASSES
+# ============================================================================
+
+classes:
+
+  Role:
+    class_uri: scont:Role
+    description: >-
+      A logical actor that entities can fulfill. Flows bind source and target
+      to roles so handoffs are reusable across any entity playing that role.
+      Instances in concrete schemas carry a `scont:role` annotation with
+      fields: description, llm_prompt_hint, (optional) can_be_played_by.
+
+  Event:
+    class_uri: scont:Event
+    description: >-
+      A first-class happening the ontology can observe or trigger on. Events
+      are the glue between flows — one flow's completion can be the event that
+      triggers another. They also represent external signals entering the
+      system. Instances carry a `scont:event` annotation with fields:
+      description, observed_by (role name), llm_prompt_hint.
+
+  Flow:
+    class_uri: scont:Flow
+    abstract: true
+    description: >-
+      A typed, directed, stateful handoff between roles, carrying a quantum
+      (a payload object with its own lifecycle). The primary orchestration
+      surface: orchestrators read flows to answer "who hands off to whom,
+      with what payload, under what conditions." Concrete subtypes
+      (InformationFlow / MaterialFlow / CashFlow) specialize by the
+      conservation and reversibility semantics of the quantum.
+
+  InformationFlow:
+    class_uri: scont:InformationFlow
+    is_a: Flow
+    description: >-
+      A flow whose quantum is not conserved (copyable). Freshness, authority,
+      and versioning are the relevant invariants. Examples: demand signals,
+      procurement requests, forecasts, approvals, status updates.
+
+  MaterialFlow:
+    class_uri: scont:MaterialFlow
+    is_a: Flow
+    description: >-
+      A flow whose quantum is physical and mass-conserving minus loss. Lot
+      tracking, chain of custody, and handling conditions are the relevant
+      invariants. Examples: shipments, goods receipts, returns.
+
+  CashFlow:
+    class_uri: scont:CashFlow
+    is_a: Flow
+    description: >-
+      A flow whose quantum is value-conserving, directional, and
+      settlement-final. Currency, fx rate, and reversal windows are the
+      relevant concerns. Examples: invoices, payments, settlements.
+
+  StateMachine:
+    class_uri: scont:StateMachine
+    description: >-
+      A finite state machine declaration: a set of states, the allowed
+      transitions between them (optionally with triggers and guards), an
+      initial state, and terminal states. Referenced from flows by
+      `lifecycle_ref`. Instances carry a `scont:state_machine` annotation
+      with fields: states, transitions, initial, terminal.

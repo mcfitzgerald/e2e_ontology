@@ -1,0 +1,231 @@
+# ============================================================================
+# supply_chain_demo.yaml — Minimal slice for the §10 de-risking spike
+# ============================================================================
+#
+# This is the smallest ontology fragment that exercises the full extension
+# pattern end-to-end:
+#
+#   - One plain entity (ProcurementRequest) — the quantum
+#   - Two roles (demand_planning, procurement)
+#   - One event (demand_anomaly_detected)
+#   - One state machine (RequestLifecycle)
+#   - One flow (submit_procurement_request) carrying the happy path
+#   - One blocking axiom (respect_lead_time) attached to the flow
+#
+# Enough to test the three spike questions in initial_design_draft.md §10:
+#   Q1. Given a candidate ProcurementRequest instance, does the axiom fire?
+#   Q2. When submit_procurement_request is in 'submitted' state, what role
+#       should the orchestrator route to next?
+#   Q3. If the axiom fires, what flow should fire instead?  (Q3 will need
+#       the recovery flow to pass — see the optional second flow below.)
+
+id: https://e2e-ontology.dev/schemas/supply_chain_demo
+name: supply_chain_demo
+version: "0.1.0"
+description: >-
+  Minimal supply chain ontology fragment for the POC spike. Demonstrates the
+  demand→procurement happy path and the disruption→replan unhappy path routed
+  by a blocking axiom on the flow.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  scont:  https://e2e-ontology.dev/
+
+default_prefix: scont
+default_range: string
+
+imports:
+  - linkml:types
+  - core
+
+# ============================================================================
+# CLASSES
+# ============================================================================
+
+classes:
+
+  # --------------------------------------------------------------------------
+  # Plain entity — the quantum carried by the flow. No `instantiates:`.
+  # --------------------------------------------------------------------------
+
+  ProcurementRequest:
+    description: >-
+      The typed payload demand planning emits to procurement in response to
+      a detected demand anomaly. Moves through draft → submitted → approved.
+    attributes:
+      triggering_signal:
+        description: "Reference to the demand signal that produced this request"
+        range: string
+      sku:
+        description: "The SKU affected by the demand signal"
+        range: string
+        required: true
+      quantity:
+        description: "Suggested replenishment quantity in units"
+        range: decimal
+        required: true
+      urgency:
+        description: "Routing priority"
+        range: UrgencyLevel
+      required_by:
+        description: "Date the replenishment must be on hand (integer day 1-365)"
+        range: integer
+        required: true
+      justification:
+        description: "Free-form business rationale"
+        range: string
+      supplier:
+        description: "Suggested supplier; resolved by procurement if null at draft"
+        range: string
+      status:
+        description: "Current state in the RequestLifecycle FSM"
+        range: RequestStatus
+        required: true
+
+  # --------------------------------------------------------------------------
+  # Roles — meta-typed, lightweight tag + JSON annotation
+  # --------------------------------------------------------------------------
+
+  demand_planning:
+    instantiates: [scont:Role]
+    annotations:
+      scont:role: >-
+        {
+          "description": "Forecasts demand, detects anomalies, revises plans.",
+          "llm_prompt_hint": "This role owns demand-side signals. When an anomaly is detected it emits a ProcurementRequest quantum to procurement via submit_procurement_request. If procurement finds the request infeasible, this role receives a ReplanRequest back and must revise the forecast or timing."
+        }
+
+  procurement:
+    instantiates: [scont:Role]
+    annotations:
+      scont:role: >-
+        {
+          "description": "Sources materials, drafts purchase orders, manages supplier relationships.",
+          "llm_prompt_hint": "Target role for submit_procurement_request. Consumes a ProcurementRequest quantum, resolves a supplier, and drafts a PO. Must respect supplier lead times (enforced by the respect_lead_time axiom on the flow). If the axiom blocks, procurement emits a ReplanRequest back to demand_planning via replan_on_infeasible_request."
+        }
+
+  # --------------------------------------------------------------------------
+  # Event — what triggers the flow
+  # --------------------------------------------------------------------------
+
+  demand_anomaly_detected:
+    instantiates: [scont:Event]
+    annotations:
+      scont:event: >-
+        {
+          "description": "A statistically significant departure from forecast for a SKU.",
+          "observed_by": "demand_planning",
+          "llm_prompt_hint": "Fires when the demand signal for a SKU deviates materially from forecast. This is the trigger for submit_procurement_request. In the POC this event is externally simulated; in production it would be emitted by an anomaly-detection component downstream of demand planning."
+        }
+
+  # --------------------------------------------------------------------------
+  # State machine — the quantum's lifecycle
+  # --------------------------------------------------------------------------
+
+  RequestLifecycle:
+    instantiates: [scont:StateMachine]
+    annotations:
+      scont:state_machine: >-
+        {
+          "states": ["draft", "submitted", "approved", "rejected", "expired"],
+          "transitions": [
+            {"from": "draft",     "to": "submitted", "trigger": "submit",   "guard": null},
+            {"from": "submitted", "to": "approved",  "trigger": "approve",  "guard": "respect_lead_time"},
+            {"from": "submitted", "to": "rejected",  "trigger": "reject",   "guard": null},
+            {"from": "submitted", "to": "expired",   "trigger": "timeout",  "guard": null}
+          ],
+          "initial":  "draft",
+          "terminal": ["approved", "rejected", "expired"]
+        }
+
+  # --------------------------------------------------------------------------
+  # Flow — the happy path
+  # --------------------------------------------------------------------------
+
+  submit_procurement_request:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:flow: >-
+        {
+          "source_role":   "demand_planning",
+          "target_role":   "procurement",
+          "quantum":       "ProcurementRequest",
+          "trigger_event": "demand_anomaly_detected",
+          "lifecycle_ref": "RequestLifecycle"
+        }
+      scont:axioms: >-
+        [
+          {
+            "name": "respect_lead_time",
+            "scope": "flow",
+            "expr": "{quantum.required_by} >= today() + {quantum.supplier.lead_time}",
+            "nl":   "A procurement request's required-by date must not fall inside its supplier's lead time.",
+            "severity": "blocking",
+            "message":  "Required-by date is inside supplier lead time",
+            "references": {"metrics": ["supplier.lead_time"]},
+            "on_failure_route_to": "replan_on_infeasible_request"
+          }
+        ]
+      scont:llm_prompt_hint: >-
+        Happy-path information flow from demand_planning to procurement. Fires on
+        demand_anomaly_detected with a ProcurementRequest quantum. The blocking
+        axiom respect_lead_time catches infeasible required-by dates and routes to
+        replan_on_infeasible_request on failure — the orchestrator should read the
+        axiom's on_failure_route_to field to find the recovery flow.
+
+  # --------------------------------------------------------------------------
+  # Flow — the unhappy-path recovery
+  # --------------------------------------------------------------------------
+
+  replan_on_infeasible_request:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:flow: >-
+        {
+          "source_role":   "procurement",
+          "target_role":   "demand_planning",
+          "quantum":       "ProcurementRequest",
+          "trigger_event": "procurement_infeasible",
+          "lifecycle_ref": "RequestLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Recovery information flow. Fires when procurement cannot satisfy a
+        ProcurementRequest (typically because the respect_lead_time axiom blocked
+        on submit_procurement_request). Routes the request back to demand_planning
+        for revision of the forecast, timing, or quantity. Reuses the same
+        ProcurementRequest quantum so the demand planning agent has full context.
+
+  procurement_infeasible:
+    instantiates: [scont:Event]
+    annotations:
+      scont:event: >-
+        {
+          "description": "Procurement determined a request cannot be satisfied as drafted — typically due to lead time, supply constraints, or budget.",
+          "observed_by": "procurement",
+          "llm_prompt_hint": "Emitted when a blocking axiom on submit_procurement_request fires. Triggers replan_on_infeasible_request to route back to demand_planning."
+        }
+
+# ============================================================================
+# ENUMS
+# ============================================================================
+
+enums:
+
+  UrgencyLevel:
+    permissible_values:
+      low:
+        description: "Routine replenishment; standard lead time acceptable"
+      normal:
+        description: "Default routing priority"
+      high:
+        description: "Expedited handling requested"
+      critical:
+        description: "Stock-out imminent; bypass standard review"
+
+  RequestStatus:
+    permissible_values:
+      draft:
+      submitted:
+      approved:
+      rejected:
+      expired:
