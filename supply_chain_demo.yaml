@@ -52,13 +52,16 @@ classes:
     description: >-
       The typed payload demand planning emits to procurement in response to
       a detected demand anomaly. Moves through draft → submitted → approved.
+    annotations:
+      scont:domain: procurement
+      scont:subdomain: sourcing
     attributes:
       triggering_signal:
         description: "Reference to the demand signal that produced this request"
         range: string
       sku:
         description: "The SKU affected by the demand signal"
-        range: string
+        range: SKU
         required: true
       quantity:
         description: "Suggested replenishment quantity in units"
@@ -76,10 +79,124 @@ classes:
         range: string
       supplier:
         description: "Suggested supplier; resolved by procurement if null at draft"
-        range: string
+        range: Supplier
       status:
         description: "Current state in the RequestLifecycle FSM"
         range: RequestStatus
+        required: true
+    rules:
+      # Tier-1 native LinkML rule (see initial_design_draft.md §4.Tier-1).
+      # Simple class-level invariants drop into rules:, get validated by
+      # LinkML's own validator and compiled to Pydantic @validator decorators.
+      - preconditions:
+          slot_conditions:
+            urgency:
+              equals_string: critical
+        postconditions:
+          slot_conditions:
+            justification:
+              required: true
+        description: >-
+          Critical-urgency requests must include a written justification. A
+          procurement agent receiving a critical request without rationale
+          should reject it for clarification rather than escalate.
+
+  # --------------------------------------------------------------------------
+  # Supporting plain entities referenced by ProcurementRequest and axioms
+  # --------------------------------------------------------------------------
+
+  Supplier:
+    description: "A raw-material or service supplier to the enterprise."
+    annotations:
+      scont:domain: procurement
+      scont:subdomain: sourcing
+      # One metric example — demonstrates the MetricFlow-compatible shape
+      # described in initial_design_draft.md §5. Ontology-authoritative for
+      # now, flagged for future promotion to dbt semantic layer.
+      scont:metrics: >-
+        [
+          {
+            "name": "supplier_lead_time",
+            "kind": "measure",
+            "entity": "Supplier",
+            "aggregation": "avg",
+            "expr": "lead_time_days",
+            "time_grain": "day",
+            "unit": "days",
+            "definition": "Average commit-to-dispatch lead time (days) for the supplier.",
+            "source": "local",
+            "promotion_target": "dbt"
+          }
+        ]
+    attributes:
+      supplier_code:
+        range: string
+        required: true
+      name:
+        range: string
+        required: true
+      country:
+        range: string
+      lead_time_days:
+        description: "Committed days from PO acknowledgment to dispatch"
+        range: integer
+        minimum_value: 0
+        required: true
+      active:
+        range: boolean
+        required: true
+
+  SKU:
+    description: "Stock keeping unit — a finished good or raw material."
+    annotations:
+      scont:domain: supply
+      scont:subdomain: product
+    attributes:
+      sku_code:
+        range: string
+        required: true
+      name:
+        range: string
+        required: true
+      category:
+        range: string
+      unit_of_measure:
+        description: "Canonical unit for quantity — case, each, kg, l"
+        range: string
+      active:
+        range: boolean
+        required: true
+
+  PurchaseOrder:
+    description: >-
+      The artifact procurement produces after successfully resolving a
+      ProcurementRequest. Transmitted to supplier_management for dispatch
+      to an external supplier. Quantum of the submit_po_to_supplier flow.
+    annotations:
+      scont:domain: procurement
+      scont:subdomain: purchasing
+    attributes:
+      po_number:
+        range: string
+        required: true
+      supplier:
+        range: Supplier
+        required: true
+      sku:
+        range: SKU
+        required: true
+      quantity:
+        range: decimal
+        required: true
+      required_by:
+        description: "Date the goods must be on hand (integer day 1-365)"
+        range: integer
+        required: true
+      total_value:
+        description: "Line total — quantity × unit cost"
+        range: decimal
+      status:
+        range: POStatus
         required: true
 
   # --------------------------------------------------------------------------
@@ -98,10 +215,21 @@ classes:
   procurement:
     instantiates: [scont:Role]
     annotations:
+      scont:domain: procurement
       scont:role: >-
         {
           "description": "Sources materials, drafts purchase orders, manages supplier relationships.",
-          "llm_prompt_hint": "Target role for submit_procurement_request. Consumes a ProcurementRequest quantum, resolves a supplier, and drafts a PO. Must respect supplier lead times (enforced by the respect_lead_time axiom on the flow). If the axiom blocks, procurement emits a ReplanRequest back to demand_planning via replan_on_infeasible_request."
+          "llm_prompt_hint": "Target role for submit_procurement_request. Consumes a ProcurementRequest quantum, resolves a supplier, and drafts a PO. Must respect supplier lead times (enforced by the respect_lead_time axiom on the flow). If the axiom blocks, procurement emits a ReplanRequest back to demand_planning via replan_on_infeasible_request. On happy path, emits a po_drafted event and hands the PurchaseOrder off to supplier_management via submit_po_to_supplier."
+        }
+
+  supplier_management:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: procurement
+      scont:role: >-
+        {
+          "description": "Enterprise-side interface that transmits purchase orders to external suppliers and tracks their lifecycle.",
+          "llm_prompt_hint": "Target role for submit_po_to_supplier. Receives a drafted PurchaseOrder quantum from procurement and is responsible for transmission, acknowledgment tracking, and fulfillment confirmation. NOT the supplier itself — this is the role that talks TO suppliers."
         }
 
   # --------------------------------------------------------------------------
@@ -125,6 +253,7 @@ classes:
   RequestLifecycle:
     instantiates: [scont:StateMachine]
     annotations:
+      scont:domain: procurement
       scont:state_machine: >-
         {
           "states": ["draft", "submitted", "approved", "rejected", "expired"],
@@ -136,6 +265,24 @@ classes:
           ],
           "initial":  "draft",
           "terminal": ["approved", "rejected", "expired"]
+        }
+
+  PurchaseOrderLifecycle:
+    instantiates: [scont:StateMachine]
+    annotations:
+      scont:domain: procurement
+      scont:state_machine: >-
+        {
+          "states": ["draft", "transmitted", "acknowledged", "fulfilled", "cancelled"],
+          "transitions": [
+            {"from": "draft",        "to": "transmitted",  "trigger": "transmit",       "guard": null},
+            {"from": "transmitted",  "to": "acknowledged", "trigger": "acknowledge",    "guard": null},
+            {"from": "acknowledged", "to": "fulfilled",    "trigger": "goods_received", "guard": null},
+            {"from": "draft",        "to": "cancelled",    "trigger": "cancel",         "guard": null},
+            {"from": "transmitted",  "to": "cancelled",    "trigger": "cancel",         "guard": null}
+          ],
+          "initial":  "draft",
+          "terminal": ["fulfilled", "cancelled"]
         }
 
   # --------------------------------------------------------------------------
@@ -180,6 +327,7 @@ classes:
   replan_on_infeasible_request:
     instantiates: [scont:InformationFlow]
     annotations:
+      scont:domain: procurement
       scont:flow: >-
         {
           "source_role":   "procurement",
@@ -195,14 +343,52 @@ classes:
         for revision of the forecast, timing, or quantity. Reuses the same
         ProcurementRequest quantum so the demand planning agent has full context.
 
+  # --------------------------------------------------------------------------
+  # Flow — downstream procurement → supplier_management
+  # --------------------------------------------------------------------------
+
+  submit_po_to_supplier:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: procurement
+      scont:flow: >-
+        {
+          "source_role":   "procurement",
+          "target_role":   "supplier_management",
+          "quantum":       "PurchaseOrder",
+          "trigger_event": "po_drafted",
+          "lifecycle_ref": "PurchaseOrderLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Downstream information flow from procurement to supplier_management
+        carrying a drafted PurchaseOrder. Fires after procurement successfully
+        resolves a ProcurementRequest (the respect_lead_time axiom passed and the
+        quantum reached the approved state). This closes the happy-path chain:
+        demand_anomaly_detected → submit_procurement_request → po_drafted →
+        submit_po_to_supplier. The PurchaseOrder moves through PurchaseOrderLifecycle
+        as supplier_management transmits, tracks acknowledgment, and confirms
+        fulfillment.
+
   procurement_infeasible:
     instantiates: [scont:Event]
     annotations:
+      scont:domain: procurement
       scont:event: >-
         {
           "description": "Procurement determined a request cannot be satisfied as drafted — typically due to lead time, supply constraints, or budget.",
           "observed_by": "procurement",
           "llm_prompt_hint": "Emitted when a blocking axiom on submit_procurement_request fires. Triggers replan_on_infeasible_request to route back to demand_planning."
+        }
+
+  po_drafted:
+    instantiates: [scont:Event]
+    annotations:
+      scont:domain: procurement
+      scont:event: >-
+        {
+          "description": "Procurement has drafted a PurchaseOrder ready to transmit to a supplier.",
+          "observed_by": "procurement",
+          "llm_prompt_hint": "Fires after procurement successfully resolves a ProcurementRequest into a concrete PurchaseOrder — i.e. after the respect_lead_time axiom passes and the quantum reaches the approved state. Triggers submit_po_to_supplier to hand the PO off to supplier_management."
         }
 
 # ============================================================================
@@ -229,3 +415,11 @@ enums:
       approved:
       rejected:
       expired:
+
+  POStatus:
+    permissible_values:
+      draft:
+      transmitted:
+      acknowledged:
+      fulfilled:
+      cancelled:

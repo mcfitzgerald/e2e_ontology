@@ -34,11 +34,19 @@ import yaml
 
 @dataclass
 class Entity:
-    """A plain structural entity (no `instantiates:`). Slots preserved raw."""
+    """A plain structural entity (no `instantiates:`). Slots preserved raw.
+
+    Entities can carry annotations (e.g. scont:domain tags, scont:metrics
+    bodies) and native LinkML `rules:` (Tier-1 invariants). These are passed
+    through as raw dict/list so the LLM and the primer can consume them
+    without the exploder needing a specific parser for each kind.
+    """
 
     name: str
     description: str | None = None
     attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    annotations: dict[str, Any] = field(default_factory=dict)
+    rules: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -294,6 +302,8 @@ def _build_entity(name: str, class_body: dict[str, Any]) -> Entity:
         name=name,
         description=class_body.get("description"),
         attributes=dict(class_body.get("attributes") or {}),
+        annotations=_get_annotations(class_body),
+        rules=list(class_body.get("rules") or []),
     )
 
 
@@ -431,6 +441,16 @@ if __name__ == "__main__":
 
     ontology = load_ontology(sys.argv[1])
     print(ontology.summary())
+    print()
+    print("Entities:")
+    for ent in ontology.entities.values():
+        extras = []
+        if ent.rules:
+            extras.append(f"{len(ent.rules)} rule(s)")
+        if ent.annotations:
+            extras.append(f"{len(ent.annotations)} annotation(s)")
+        suffix = f" [{', '.join(extras)}]" if extras else ""
+        print(f"  - {ent.name}: {len(ent.attributes)} attr(s){suffix}")
     print()
     print("Roles:")
     for r in ontology.roles.values():

@@ -1,7 +1,7 @@
 # Initial Design Draft — Supply Chain Ontology POC
 
-**Status:** Early design, converging. Format choice (LinkML) validated. Extension pattern refined against a reference ontology (`pcg.yaml`) proven in the user's LLM stack. Load-bearing concerns largely resolved. No new YAML written yet.
-**Purpose:** Memorialize the brainstorming session's conclusions so we can resume with shared context and avoid re-litigating settled points.
+**Status:** POC foundation in place and validated. Format choice (LinkML) validated. Extension pattern refined against `pcg.yaml` and **proven empirically** — the de-risking spike (§10) passed all three LLM-reasoning questions cleanly on first run, with the LLM exhibiting deeper cross-reference traversal than required (see §11). Ontology, exploder, and primer all exist and work end-to-end.
+**Purpose:** Memorialize the brainstorming session's conclusions, record what we learned from the spike, and capture forward-looking concerns so we can resume with shared context and avoid re-litigating settled points.
 
 ---
 
@@ -439,37 +439,206 @@ Both slices share the `ProcurementRequest` quantum, so slice 2 reuses slice 1's 
 
 ---
 
-## 9. Open points to close before writing production YAML
+## 9. Open points — closed by POC
 
-1. **Run the focused spike in §10.** Gate every subsequent item on this.
-2. **Concrete annotation shapes** for each tag — what fields `scont:role` / `scont:event` / `scont:flow` / `scont:state_machine` / `scont:axioms` each require, accept as optional, and forbid. Documented in `core.yaml` as prose descriptions on the meta-classes; enforced by the exploder's shape validator.
-3. **FSM representation — confirm shape.** Proposed: `StateMachine` meta-class with annotation body `{states: [...], transitions: [{from, to, trigger, guard}], initial, terminal}`. Declared as a class with `instantiates: [scont:StateMachine]`, referenced from flows by `lifecycle_ref`.
-4. **Axiom unification.** Confirm a single axiom body shape with a `scope: class | flow` field on each entry, rather than separate `ClassInvariant` / `FlowInvariant` constructs. Tier-1 simple invariants stay in native `rules:`; Tier-2 complex invariants use the annotation form.
-5. **File layout.**
-   - `core.yaml` — lightweight meta-class documentation shells (Role / Event / Flow + 3 subtypes / StateMachine). Importable.
-   - `supply_chain_demo.yaml` — imports `core.yaml`, declares concrete entities, roles, events, flows, FSMs, and axioms for the two slices.
-   - `exploder.py` — Python module that parses, validates, and structures the ontology (§6.5).
+All original open points from the pre-spike draft are now resolved. This section is kept as a historical record of what had to land before we could commit to the pattern. Forward-looking work is in §13.
+
+1. ~~**Run the focused spike in §10.**~~ ✅ Done — all three LLM-reasoning questions passed on first run. See §11.
+2. ~~**Concrete annotation shapes**~~ ✅ Done — shapes for `scont:role`, `scont:event`, `scont:flow`, `scont:state_machine`, `scont:axioms` are documented as prose on the meta-classes in `core.yaml` and enforced by the exploder's cross-reference validator.
+3. ~~**FSM representation — confirm shape.**~~ ✅ Done — `RequestLifecycle` in `supply_chain_demo.yaml` demonstrates the `{states, transitions: [{from, to, trigger, guard}], initial, terminal}` shape and the exploder validates its internal consistency.
+4. ~~**Axiom unification.**~~ ✅ Done — a single axiom body shape with `scope: "class" | "flow"` is in use. Tier-1 native `rules:` and Tier-2 annotation-carried axioms coexist without conflict.
+5. ~~**File layout.**~~ ✅ Done — three files at repo root: `core.yaml`, `supply_chain_demo.yaml`, `exploder.py`. Plus the primer (`ontology_primer.md`) that emerged as a fourth deliverable once we saw how much scaffolding the LLM needed.
 
 ---
 
-## 10. Next step — focused spike + exploder
+## 10. De-risking spike — plan (completed)
 
-The `pcg.yaml` evidence shrinks the spike significantly. Remaining questions are specific to our abstract-orchestration use case (pcg models SQL-table content; we model process and handoffs).
+This section is kept as a historical record. The spike ran and passed; results are in §11.
 
-**Spike scope (~2 hours):**
+**Spike scope:**
 
 1. **Write a minimal supply-chain ontology fragment** in the pcg style: one flow (`submit_procurement_request`), its quantum (`ProcurementRequest`), one role pair (`demand_planning` / `procurement`), one FSM (`RequestLifecycle`), one event (`demand_anomaly_detected`), and one blocking axiom (`respect_lead_time`). ~60 lines of YAML.
 2. **Start writing the exploder.** Even the bare parse-and-produce-Python-objects version is enough for the first pass; shape validation and the resolved JSON view follow.
 3. **Feed the fragment whole-cloth into the existing LLM validator / reasoning stack** and test three questions:
-   - *"Given a candidate `ProcurementRequest` instance, does the axiom `respect_lead_time` fire?"* — tests Logical-layer reasoning.
-   - *"When `submit_procurement_request` is in 'submitted' state, what role should the orchestrator route to next?"* — tests Kinetic-layer traversal.
-   - *"If the axiom fires, what flow should fire instead?"* — tests that the unhappy-path routing is legible from the ontology alone.
+   - **Q1.** *"Given a candidate `ProcurementRequest` instance, does the axiom `respect_lead_time` fire?"* — tests Logical-layer reasoning.
+   - **Q2.** *"When `submit_procurement_request` is in 'submitted' state, what role should the orchestrator route to next?"* — tests Kinetic-layer traversal.
+   - **Q3.** *"If the axiom fires, what flow should fire instead?"* — tests that the unhappy-path routing is legible from the ontology alone.
 
 **Decision gates:**
 
-- **LLM reasoning succeeds on all three** → proceed to full `core.yaml` + `supply_chain_demo.yaml` with confidence. The exploder grows into a development aid, validator, and orchestrator-side interface.
-- **Kinetic-layer traversal is shaky** → use the exploder's resolved JSON view as the primary LLM context format. Cheap adjustment, no design change.
-- **Logical-layer axiom firing is shaky** → strengthen the `nl:` prose, add `llm_prompt_hint` on axiom entries themselves, retry.
-- **Something unexpected breaks** → revisit §6.4 fallback.
+- ✅ **LLM reasoning succeeds on all three** → proceed to full `core.yaml` + `supply_chain_demo.yaml` with confidence. The exploder grows into a development aid, validator, and orchestrator-side interface. **This gate tripped.**
+- ⏸ Kinetic-layer traversal is shaky → use the exploder's resolved JSON view as the primary LLM context format. *(Not triggered.)*
+- ⏸ Logical-layer axiom firing is shaky → strengthen the `nl:` prose, add `llm_prompt_hint` on axiom entries themselves, retry. *(Not triggered.)*
+- ⏸ Something unexpected breaks → revisit §6.4 fallback. *(Not triggered.)*
 
-Once the spike completes and gates clear, the next concrete artifact is the two-file draft (`core.yaml` + `supply_chain_demo.yaml`) plus a working `exploder.py`, realizing the design end-to-end and ready to expose any remaining design gaps before we commit.
+---
+
+## 11. Spike results and learnings
+
+Context given to the LLM: `ontology_primer.md` + `core.yaml` + `supply_chain_demo.yaml` (whole-schema stuffing). Three questions asked, answers analyzed below.
+
+### Q1 — Does `respect_lead_time` fire for a given instance?
+
+**Answer (correct):** Yes — fires as a blocking violation.
+
+The LLM evaluated the `expr` body (`{quantum.required_by} >= today() + {quantum.supplier.lead_time}`), substituted the given values (`200 >= 180 + 30`), computed `200 >= 210 → false`, and correctly identified that the axiom's `severity: blocking` means the orchestrator must invoke the recovery route named in `on_failure_route_to`. This is the straightforward case — the axiom body is right there and the arithmetic is trivial — but it confirms the **Tier-2 annotation-carried axiom** reads cleanly from whole-schema context.
+
+### Q2 — Where does the orchestrator route when the quantum is in 'submitted'?
+
+**Answer (correct):** To the `procurement` role.
+
+Read from `submit_procurement_request.scont:flow`: `source_role: demand_planning` / `target_role: procurement`. The `submitted` state is the handoff point.
+
+**The interesting part:** the LLM went further than the question required. It noted that *"the next transition, `submitted → approved`, is guarded by `respect_lead_time` and is procurement's responsibility to attempt."* That's a four-hop traversal:
+
+```
+FSM transition "submitted → approved"
+  → "guard": "respect_lead_time"
+  → (recognized as an axiom name by convention)
+  → axiom defined on submit_procurement_request with severity: blocking
+  → "procurement's responsibility because target_role is procurement"
+```
+
+The LLM inferred this without the primer or the ontology explicitly stating "guards on FSM transitions resolve to axiom names defined on the parent flow." It was legible from name convergence alone.
+
+### Q3 — What flow fires instead when the blocking axiom triggers?
+
+**Answer (correct):** `replan_on_infeasible_request`.
+
+Read directly from the axiom body's `on_failure_route_to` field. The LLM then resolved that flow's body and correctly described its shape: reversed direction (`procurement → demand_planning`), same quantum (`ProcurementRequest`, preserving context), new trigger event (`procurement_infeasible`), same lifecycle FSM. A clean two-hop resolution.
+
+### What we learned
+
+1. **The extension pattern works for abstract orchestration content**, not just the virtual-twin-over-SQL content that `pcg.yaml` demonstrated. This was the narrower concern remaining after pcg validated the pattern; it's now also resolved.
+2. **`ontology_primer.md` + `core.yaml` + the demo file together are sufficient context** for the LLM to answer meaningful questions about the ontology without hallucination or missed cross-references. The primer was well worth writing.
+3. **The LLM reasons about the ontology more deeply than prompt engineering alone would predict.** Q2's guard-to-axiom resolution was a genuine piece of inference chain, not a lookup. This strongly suggests the pattern will hold under wider variation than we tested — the LLM is understanding structure, not pattern-matching on field names.
+4. **`llm_prompt_hint` pays for itself.** Every concrete role / event / flow in the demo carried a hint; the LLM's answers quoted from them verbatim in several places. They are load-bearing, not decorative.
+5. **`on_failure_route_to` as an axiom-level field is the right shape** for orchestrator recovery routing. Explicit, no-guessing, validated by the exploder. Keep it.
+
+### One subtlety the spike exposed
+
+**FSM transition guards are named strings that happen to resolve to axiom names — a convention, not an enforced relationship.** In the demo, `RequestLifecycle`'s `submitted → approved` transition has `"guard": "respect_lead_time"`, which matches the name of the Tier-2 axiom on `submit_procurement_request`. The LLM resolved this correctly, but nothing in the ontology or the exploder validates that guards must resolve to declared axioms. If a typo slipped into the guard name, neither LinkML nor the exploder would catch it.
+
+**Decision for POC:** leave as convention. The LLM handles it and the risk is low at current scale. Revisit when either (a) we add an agent that cannot do the inference the LLM does, or (b) we see a real bug caused by a drifted guard name. When we do tighten it, the fix is a small addition to the exploder's validator: for each FSM, walk its transition guards and confirm each resolves to a declared axiom somewhere in scope (the parent flow, the parent class, or a standalone axiom).
+
+---
+
+## 12. Context management as the ontology scales
+
+The current POC relies on **whole-schema context stuffing**: feed `ontology_primer.md` + `core.yaml` + `supply_chain_demo.yaml` into the LLM's context window on every query. This works at the current scale (~300 lines of actual content) and was empirically validated at ~3000 lines via `pcg.yaml`. The question this section addresses is what to do when the ontology grows past the point where stuffing is viable — whether the binding constraint becomes token budget, coherence degradation, or per-query cost.
+
+**The spectrum of options,** ordered roughly from simplest to most sophisticated:
+
+### 12.1 Whole-schema context stuffing — the current approach
+
+Feed everything, every query. Simple, robust, proven. Breaks down when (a) the ontology exceeds the available context window, (b) signal-to-noise degrades with scale (the LLM misses details in a long document), or (c) per-query cost becomes a constraint in production.
+
+### 12.2 Modular loading via domain tags
+
+Tag every class with `scont:domain` and `scont:subdomain` (as `pcg.yaml` already does). The consumer loads only the files or sections relevant to the current query. Works well for domain-scoped questions, degrades at cross-domain boundaries (which is a non-trivial fraction of supply-chain questions). Cheap to add; does not eliminate the context-stuffing step, just reduces its payload.
+
+### 12.3 Exploder as a callable tool
+
+Expose `exploder.py` as an agent-callable tool with query-shaped methods:
+
+- `get_flow(name) -> Flow`
+- `list_flows_where(source_role=..., target_role=..., quantum=...) -> list[Flow]`
+- `get_axioms_for(class_or_flow_name) -> list[Axiom]`
+- `resolve_role(name) -> Role`
+- `find_flows_triggered_by(event_name) -> list[Flow]`
+- `traverse_state_machine(fsm_name, from_state) -> list[Transition]`
+- `evaluate_axiom(axiom_name, instance_data) -> bool` (via `expr` when possible, LLM fallback for `nl`)
+
+The agent queries the ontology the way it queries any other structured tool; only the results enter its context. The ontology itself never touches the LLM prompt. **This is the most mechanical approach and the one with the best scale characteristics** — the full ontology can live on disk, not in any context window.
+
+### 12.4 Staged retrieval — table of contents plus on-demand detail
+
+A lightweight index (manifest of all classes grouped by type, one-line descriptions, cross-reference summary) is always loaded up front. Full definitions are fetched on demand via tool calls. Hybrid of 12.1 and 12.3. The "table of contents" stays in context; details are retrieved when needed. Preserves cross-domain reasoning while bounding per-query payload.
+
+### 12.5 Explorer agents — delegated ontology navigation
+
+A dedicated sub-agent whose job is to traverse and distill the ontology. The main orchestrator asks the explorer questions like *"for this demand signal, what's the feasible path and what are the gates?"* The explorer reads the ontology (via its own context window or tool-based access), reasons over it, and returns a distilled answer. The orchestrator never sees raw ontology; it sees the explorer's findings. Highest engineering cost, highest separation of concerns, best for multi-agent architectures where different agents need different distillations of the same ontology.
+
+### 12.6 Tradeoffs at a glance
+
+| Approach | Latency | Cost per query | Cross-domain reasoning | Agent complexity |
+|---|---|---|---|---|
+| 12.1 Whole stuffing | Fast (1 call) | High (full schema every time) | Excellent | Trivial |
+| 12.2 Modular loading | Fast | Medium (subset every time) | Degraded at boundaries | Low |
+| 12.3 Exploder-as-tool | Slower (multi-call) | Low (only what's fetched) | Requires planning | Medium |
+| 12.4 Staged retrieval | Medium | Low–medium | Good (index keeps frame) | Medium |
+| 12.5 Explorer agents | Slower (agent-in-agent) | Low (explorer distills) | Excellent (explorer plans) | High |
+
+### 12.7 Design decisions for the POC
+
+- **Stay on 12.1 for now.** The ontology is small, the pattern is proven, and premature optimization would hide real design bugs.
+- **Design forward-compatibly for 12.2 and 12.3.** Specifically:
+  - Add `scont:domain` / `scont:subdomain` annotations to classes in the expanded demo. Cheap, no cost at current scale, enables later modularization by filter.
+  - Keep the exploder's public API clean and query-shaped. Every method it gains should be something an agent-callable tool would plausibly expose. When the time comes to wrap it as a tool, it should be a thin shim.
+- **Do not build 12.3 / 12.4 / 12.5 yet.** Each is its own project. We do not yet know which scale regime we'll end up in, and the right answer may be different for development vs. production, for single-agent vs. multi-agent architectures, and for narrow vs. cross-domain queries.
+
+### 12.8 Triggers to re-evaluate
+
+Revisit this section and pick from the spectrum when any of the following hits:
+
+- The ontology approaches ~10,000 lines total (order of magnitude above current).
+- LLM reasoning degrades on whole-schema queries (coherence loss, hallucinated fields, missed cross-references).
+- Per-query cost or latency becomes a constraint in a demo or production setting.
+- An orchestrator we're building for needs structured query access rather than raw ontology context.
+
+---
+
+## 13. Forward-looking work
+
+With the spike passed and the POC foundation in place, the remaining directions split into two tracks: **finishing the demo** (so we have an exec-ready narrative) and **productizing the pattern** (so the ontology can live beyond a single demo).
+
+### 13.1 Expand the demo ontology toward the full narrative
+
+*Direction 2 from the spike-completion options.*
+
+The current demo has two flows and one axiom — enough to prove the pattern, not enough to tell the "autonomous bullwhip prevention" story. Expansion should add:
+
+- **Supporting entities** the axiom references (Supplier with lead_time_days, SKU, PurchaseOrder).
+- **A Tier-1 native `rules:` example** to demonstrate the dual axiom strategy in the demo, not just the design draft.
+- **One or two metrics** to show the MetricFlow-compatible shape in practice.
+- **A third flow** that completes the forward chain — something like `submit_po_to_supplier` (procurement → supplier_management), carrying a PurchaseOrder quantum. This gives the demo a three-step narrative: demand sense → procurement action → supplier transmission.
+
+Bounded — stays under ~300 lines of YAML, still readable in one sitting. Expansion has begun in this session (see CHANGELOG).
+
+### 13.2 Harden the exploder
+
+*Direction 3.*
+
+Current state is first-cut: parser + object model + cross-reference validator + CLI summary. Forward work:
+
+- **Resolved JSON view** (§6.5 second deliverable) — flat, fully-expanded alternative context format for LLM consumption experiments and downstream tooling.
+- **Richer shape validation** — per-construct required/optional field enforcement, enum of severity levels, better error messages with source locations.
+- **Tests** — the exploder currently has no test suite; as the schema grows it needs one to stay correct.
+- **Query-shaped API methods** — move toward the shape described in §12.3 so the eventual tool-wrapping is a thin shim.
+
+### 13.3 Design the orchestrator-side read API
+
+*Direction 4.*
+
+The exploder gives us a Python object model for the ontology. An orchestrator (agent or otherwise) needs a *read API* over that model — a thin interface describing how code gets from "I'm routing a ProcurementRequest" to "the relevant flow is X, its target role is Y, its axioms are Z, and here's the recovery route." This is the Python-side equivalent of the LLM-context interface: same information, different consumer.
+
+Open questions:
+- Does the read API return raw dataclasses from `exploder.py`, or a higher-level orchestrator-facing view?
+- How does the orchestrator find the right flow for a given intent? (By event? By quantum type? By source-target role pair? All three?)
+- What's the contract for axiom evaluation — does the read API evaluate `expr` bodies, or does the orchestrator?
+- Where does `llm_prompt_hint` flow through — straight to the orchestrator's LLM prompts, or filtered / rewritten first?
+
+### 13.4 Script the full demo narrative
+
+*Direction 5.*
+
+Beat-by-beat sketch of what an exec sees during the demo: the input (a simulated demand anomaly), the agent's reasoning trace, the axiom firing, the recovery routing, the outcome. Working backward from this script will surface ontology gaps faster than adding content speculatively.
+
+Rough shape:
+1. **Scene 1 — Happy path.** Demand signal arrives. Demand planning agent reads the ontology, finds `submit_procurement_request`, drafts a `ProcurementRequest`. Procurement agent receives, drafts a PO, all axioms pass, PO transmitted.
+2. **Scene 2 — Unhappy path.** Same setup with a required_by date inside supplier lead time. Procurement drafts the PO, `respect_lead_time` fires on validation, `on_failure_route_to` directs to `replan_on_infeasible_request`. Demand planning agent receives the replan request with the original context, revises the forecast, resubmits. Axiom passes, PO transmitted.
+3. **Executive framing.** "The ontology stopped the agent from doing the wrong thing. No one wrote 'if lead_time_insufficient then route_to_replan' — the ontology declared the invariant and the recovery path, and the agents respected it. That's the pattern. Now imagine this for every handoff in the supply chain."
+
+### 13.5 Meta — proposal protocol and self-healing
+
+*Previously tabled (§8); flagging here for completeness.* Once the expanded demo and the read API are in place, the proposal protocol for agent-authored ontology diffs becomes the next meaningful design discussion. Not urgent — the context annotation dimension (provenance / status / confidence) is already the hook point.
