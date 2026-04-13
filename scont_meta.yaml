@@ -1,0 +1,426 @@
+# ============================================================================
+# scont_meta.yaml — Formal specification of scont annotation body shapes
+# ============================================================================
+#
+# This is the LinkML metaschema for the JSON-in-folded-string annotation
+# bodies that concrete supply chain ontology elements carry. It declares
+# every field of every body type (RoleBody, FlowBody, AxiomBody, etc.) so
+# that:
+#
+#   1. `gen-pydantic scont_meta.yaml` produces strict Pydantic models (in
+#      scont_bodies.py) that validate parsed annotation bodies at authoring
+#      time. No hand-written Pydantic models — regenerate when this file
+#      changes.
+#
+#   2. Human and LLM readers have a single place to look up "what fields
+#      can a RoleBody have" instead of chasing prose in multiple files.
+#
+#   3. When LinkML's native `instantiates:` annotation validation lands
+#      (currently spec'd but not implemented — see initial_design_draft.md
+#      §6), the shapes declared here slot in directly. The `class_uri:`
+#      values align with the `instantiates:` tags already in use.
+#
+# See initial_design_draft.md §3 and §6 for the extension pattern rationale.
+#
+# Regenerating scont_bodies.py:
+#
+#     uv run --with linkml gen-pydantic scont_meta.yaml > scont_bodies.py
+#
+# Or via the exploder CLI (once A3 is built):
+#
+#     python exploder.py regen-bodies
+#
+# ============================================================================
+
+id: https://e2e-ontology.dev/schemas/scont_meta
+name: scont_meta
+version: "0.1.0"
+description: >-
+  Metaschema declaring the shapes of scont annotation bodies. Concrete
+  supply chain ontology classes carry JSON-in-folded-string annotations
+  whose content conforms to the classes defined here.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  scont:  https://e2e-ontology.dev/
+
+default_prefix: scont
+default_range: string
+
+imports:
+  - linkml:types
+
+# ============================================================================
+# ENUMS — controlled vocabularies for body field values
+# ============================================================================
+
+enums:
+
+  Severity:
+    description: >-
+      Severity of an axiom violation. Blocking axioms halt the flow and
+      route via `on_failure_route_to`. Warnings surface to humans but do
+      not block. Advisory are informational only.
+    permissible_values:
+      blocking:
+        description: "Violation halts the flow; recovery routing required."
+      warning:
+        description: "Violation is surfaced to an operator but does not halt."
+      advisory:
+        description: "Informational; flagged but neither halting nor surfaced."
+
+  Scope:
+    description: "Whether an axiom attaches to a class or a flow."
+    permissible_values:
+      class:
+        description: "Class-level invariant — a constraint on the class itself."
+      flow:
+        description: "Flow-scoped invariant — a constraint on the handoff."
+
+  HumanInvolvement:
+    description: >-
+      Declares the autonomy envelope for a role. The orchestrator uses this
+      alongside its own policy (thresholds, SLAs, mechanisms) to decide
+      whether to involve a human for a given decision. Design-time domain
+      knowledge; runtime policy stays in the orchestrator.
+    permissible_values:
+      required:
+        description: "This role must always be played by a human actor."
+      conditional:
+        description: >-
+          A human may be required depending on situation complexity or
+          thresholds. Orchestrator decides per-decision based on its policy.
+      autonomous:
+        description: "This role is always agent-played; no human involvement."
+
+  FlowKind:
+    description: "Conservation/reversibility kind of a flow's quantum."
+    permissible_values:
+      information:
+        description: "Non-conserved, copyable. Freshness and authority are key."
+      material:
+        description: "Mass-conserving minus loss, physical, hard to reverse."
+      cash:
+        description: "Value-conserving, directional, settlement-final."
+
+  MetricKind:
+    description: "MetricFlow-compatible metric kind."
+    permissible_values:
+      measure:
+        description: "A raw aggregation over an entity."
+      dimension:
+        description: "A categorical or temporal grouping axis."
+      metric:
+        description: "A derived measure, typically over one or more measures."
+
+  MetricSource:
+    description: >-
+      Where a metric's definition currently lives. Ontology is authoritative
+      while dbt is not yet deployed at scale; `promotion_target: dbt` on a
+      local metric flags it as a candidate for future upstream migration.
+    permissible_values:
+      local:
+        description: "Defined here in the ontology."
+      dbt:
+        description: "Delegated to the dbt semantic layer (future)."
+
+# ============================================================================
+# BODY SHAPES — one class per scont annotation
+# ============================================================================
+
+classes:
+
+  RoleBody:
+    class_uri: scont:RoleBody
+    description: >-
+      Shape of the `scont:role` annotation carried by a class tagged
+      `instantiates: [scont:Role]`. Describes the role's semantic purpose
+      and declares its autonomy envelope for downstream orchestrators.
+    attributes:
+      description:
+        description: >-
+          One-line human description of what this role is responsible for
+          in the supply chain.
+        required: true
+      llm_prompt_hint:
+        description: >-
+          Navigation/reasoning aid for an LLM agent consuming this role:
+          what signals it owns, what flows it participates in, what gotchas
+          exist, how it relates to adjacent roles.
+        required: true
+      is_boundary:
+        description: >-
+          True if this role represents an external function the ontology
+          does not model (commercial/customer development, co-manufacturer,
+          regulatory body, etc.). Boundary roles participate in flows
+          crossing the SC boundary but their internals are outside scope.
+        range: boolean
+        required: false
+      human_involvement:
+        description: >-
+          Autonomy envelope for this role. Ontology declares the domain
+          truth ("this role may require a human for complex decisions");
+          the orchestrator decides when and how based on its policy.
+        range: HumanInvolvement
+        required: false
+      can_be_played_by:
+        description: >-
+          Optional free-form note describing the kinds of entities or actors
+          that typically play this role. Informational; not validated.
+        required: false
+
+  EventBody:
+    class_uri: scont:EventBody
+    description: >-
+      Shape of the `scont:event` annotation on a class tagged
+      `instantiates: [scont:Event]`. Events trigger flows and represent
+      first-class observable happenings in the domain.
+    attributes:
+      description:
+        description: "One-line description of what this event represents."
+        required: true
+      observed_by:
+        description: >-
+          Name of the Role that produces or detects this event. Must
+          resolve to a declared Role in the ontology.
+        required: true
+      llm_prompt_hint:
+        description: >-
+          Navigation aid: when this event fires, what downstream flows are
+          triggered, what upstream signal produced it, what an agent should
+          do when it observes it.
+        required: true
+
+  FlowBody:
+    class_uri: scont:FlowBody
+    description: >-
+      Shape of the `scont:flow` annotation on a class tagged with any of
+      `instantiates: [scont:InformationFlow | scont:MaterialFlow | scont:CashFlow]`.
+      Declares the handoff's source, target, payload, trigger, and lifecycle.
+      When `returns` is populated the flow is a query (request-response);
+      when absent it is a handoff (responsibility transfers).
+    attributes:
+      source_role:
+        description: >-
+          Name of the Role that originates this flow. Must resolve to a
+          declared Role.
+        required: true
+      target_role:
+        description: >-
+          Name of the Role that receives this flow. Must resolve to a
+          declared Role.
+        required: true
+      quantum:
+        description: >-
+          Name of the class carrying the flow's payload. For handoff flows
+          this is the business object being moved. For query flows this is
+          the request payload; the response shape is declared by `returns`.
+          Must resolve to a declared class.
+        required: true
+      trigger_event:
+        description: >-
+          Name of the Event that causes an occurrence of this flow. Must
+          resolve to a declared Event if set.
+        required: false
+      lifecycle_ref:
+        description: >-
+          Name of the StateMachine tracking the quantum's state transitions
+          through this flow. Must resolve to a declared StateMachine if set.
+        required: false
+      returns:
+        description: >-
+          Name of the class that describes the response payload for a
+          query flow. Presence of this field is the machine-validatable
+          signal that the flow is request-response (not fire-and-forget).
+          Must resolve to a declared class if set. Absent on handoff flows.
+        required: false
+
+  AxiomReferences:
+    class_uri: scont:AxiomReferences
+    description: >-
+      Structured references an axiom makes to other ontology elements.
+      Each slot is a list of names that should resolve to declared
+      ontology objects of the corresponding kind.
+    attributes:
+      metrics:
+        description: "Names of metrics the axiom references in its expr or nl body."
+        multivalued: true
+        range: string
+        required: false
+      classes:
+        description: "Names of classes the axiom references."
+        multivalued: true
+        range: string
+        required: false
+      flows:
+        description: "Names of flows the axiom references."
+        multivalued: true
+        range: string
+        required: false
+      events:
+        description: "Names of events the axiom references."
+        multivalued: true
+        range: string
+        required: false
+
+  AxiomBody:
+    class_uri: scont:AxiomBody
+    description: >-
+      Shape of a single axiom entry within the `scont:axioms` annotation
+      list on a class or flow. Each axiom is either a hard-gate blocking
+      constraint with deterministic recovery routing, or a soft constraint
+      (warning/advisory) that informs agent judgment.
+    attributes:
+      name:
+        description: >-
+          Unique axiom name. Used for cross-references (including the
+          convention that an FSM transition's `guard` field matches an
+          axiom name on the parent flow).
+        required: true
+      scope:
+        description: >-
+          Whether the axiom attaches to a class (invariant on the class's
+          instance data) or a flow (invariant on the handoff).
+        range: Scope
+        required: true
+      expr:
+        description: >-
+          Optional machine-evaluable expression in LinkML's `equals_expression`
+          syntax. Slot names in curly braces; Python-subset operators and
+          comparisons. Evaluates to None on missing values. When absent, the
+          axiom is evaluated by the LLM reading `nl`.
+        required: false
+      nl:
+        description: >-
+          Natural-language statement of the axiom. Always required. Survives
+          schema refactors where `expr` may break. Read by LLM validators and
+          by agents as navigation context.
+        required: true
+      severity:
+        description: "Severity level controlling agent response to a violation."
+        range: Severity
+        required: false
+      message:
+        description: "Short message emitted when the axiom is violated."
+        required: false
+      references:
+        description: "Structured cross-references to other ontology elements."
+        range: AxiomReferences
+        required: false
+        inlined: true
+      on_failure_route_to:
+        description: >-
+          Name of the recovery flow the orchestrator should invoke when a
+          blocking axiom violation fires. Must resolve to a declared flow
+          if set. Absence on a blocking axiom indicates the conflict requires
+          context assembly and potential human involvement at the target
+          role (see initial_design_draft.md §3.7 and §4 Two reasoning modes).
+        required: false
+
+  TransitionBody:
+    class_uri: scont:TransitionBody
+    description: >-
+      A single transition within a StateMachineBody's transitions list.
+      Wire form uses `from` and `to` (JSON keys); Pydantic models expose
+      these as `from_state` and `to_state` via field aliases.
+    attributes:
+      from_state:
+        description: "Source state name. Must be a declared state."
+        required: true
+        aliases:
+          - from
+      to_state:
+        description: "Target state name. Must be a declared state."
+        required: true
+        aliases:
+          - to
+      trigger:
+        description: "Event name or short string naming what drives the transition."
+        required: false
+      guard:
+        description: >-
+          Axiom name that gates this transition. By convention, resolves to
+          an axiom declared on the parent flow or class. The exploder
+          enforces the resolution (see initial_design_draft.md §11).
+        required: false
+
+  StateMachineBody:
+    class_uri: scont:StateMachineBody
+    description: >-
+      Shape of the `scont:state_machine` annotation on a class tagged
+      `instantiates: [scont:StateMachine]`. Declares states, transitions,
+      initial, and terminal states.
+    attributes:
+      states:
+        description: "All declared states in the FSM. Must be unique."
+        multivalued: true
+        range: string
+        required: true
+      transitions:
+        description: >-
+          List of allowed transitions. Each transition's from_state and
+          to_state must appear in `states`.
+        range: TransitionBody
+        multivalued: true
+        required: true
+        inlined: true
+        inlined_as_list: true
+      initial:
+        description: "Initial state for new instances. Must appear in `states`."
+        required: true
+      terminal:
+        description: "Terminal states. Each must appear in `states`."
+        multivalued: true
+        range: string
+        required: false
+
+  MetricBody:
+    class_uri: scont:MetricBody
+    description: >-
+      Shape of a single metric entry within the `scont:metrics` annotation
+      list on an entity class. MetricFlow-compatible vocabulary so that
+      promotion to the dbt semantic layer is a translation, not a rewrite
+      (see initial_design_draft.md §5).
+    attributes:
+      name:
+        description: "Unique metric name."
+        required: true
+      kind:
+        description: "MetricFlow metric kind."
+        range: MetricKind
+        required: true
+      entity:
+        description: >-
+          Name of the entity class this metric attaches to. Must resolve
+          to a declared class.
+        required: true
+      aggregation:
+        description: >-
+          Aggregation function (avg, sum, count, min, max, p50, p90, etc.).
+        required: false
+      expr:
+        description: >-
+          Optional computed expression in LinkML's `equals_expression` syntax.
+          If absent, the metric is a simple aggregation over a slot.
+        required: false
+      time_grain:
+        description: "Granularity of time bucketing (day, week, month, etc.)."
+        required: false
+      unit:
+        description: "Unit of measure for the metric value."
+        required: false
+      definition:
+        description: "Human-readable definition of what this metric measures."
+        required: false
+      source:
+        description: >-
+          Where the metric's definition currently lives. `local` means the
+          ontology is authoritative; `dbt` means the ontology delegates to
+          the dbt semantic layer (future).
+        range: MetricSource
+        required: false
+      promotion_target:
+        description: >-
+          Optional hint that this local metric is a candidate for future
+          promotion to the dbt semantic layer. Informational.
+        required: false

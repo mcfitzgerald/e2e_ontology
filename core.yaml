@@ -10,13 +10,20 @@
 #   - Meta-classes here are DOCUMENTATION SHELLS. They carry descriptions so
 #     that anyone (human or LLM) reading a class tagged `instantiates: [scont:X]`
 #     can resolve what X means. They do NOT declare enforced slots — real
-#     shape validation lives in exploder.py.
+#     shape validation lives in exploder.py (via auto-generated Pydantic
+#     models from scont_meta.yaml).
 #   - `instantiates:` is used as a type discriminator, not as LinkML 1.6+'s
 #     enforced metaclass-extension mechanism (which isn't validated by LinkML's
-#     own validator yet).
+#     own validator yet — see initial_design_draft.md §6.3).
 #   - Plain entities (Supplier, SKU, ProcurementRequest, etc.) do NOT
 #     instantiate anything here — a class with no `instantiates:` is by
 #     default a plain structural entity.
+#
+# Formal body-shape specifications for every annotation referenced below live
+# in `scont_meta.yaml`. That file is the source of truth; `scont_bodies.py`
+# is auto-generated from it via `gen-pydantic` and is what the exploder
+# validates against. When adding a field to an annotation body, edit
+# scont_meta.yaml and regenerate — do not hand-edit scont_bodies.py.
 #
 # See initial_design_draft.md §6 for the extension pattern, the JSON-in-string
 # annotation convention, and the exploder's role.
@@ -49,8 +56,19 @@ classes:
     description: >-
       A logical actor that entities can fulfill. Flows bind source and target
       to roles so handoffs are reusable across any entity playing that role.
-      Instances in concrete schemas carry a `scont:role` annotation with
-      fields: description, llm_prompt_hint, (optional) can_be_played_by.
+      Instances in concrete schemas carry a `scont:role` annotation whose
+      shape is formally specified in `scont_meta.yaml` (class `RoleBody`).
+
+      Boundary roles represent external functions the ontology does not model
+      (commercial/customer development, co-manufacturer, regulatory body,
+      finance). They appear as flow endpoints but their internals are outside
+      scope. Mark via `is_boundary: true` in the `scont:role` body.
+
+      A role can also declare a `human_involvement` field (required |
+      conditional | autonomous) that tells the orchestrator whether this role
+      may need a human actor. The ontology declares the domain truth; the
+      orchestrator owns thresholds and mechanisms (see
+      initial_design_draft.md §3.7).
 
   Event:
     class_uri: scont:Event
@@ -58,8 +76,8 @@ classes:
       A first-class happening the ontology can observe or trigger on. Events
       are the glue between flows — one flow's completion can be the event that
       triggers another. They also represent external signals entering the
-      system. Instances carry a `scont:event` annotation with fields:
-      description, observed_by (role name), llm_prompt_hint.
+      system. Instances carry a `scont:event` annotation whose shape is
+      formally specified in `scont_meta.yaml` (class `EventBody`).
 
   Flow:
     class_uri: scont:Flow
@@ -71,6 +89,19 @@ classes:
       with what payload, under what conditions." Concrete subtypes
       (InformationFlow / MaterialFlow / CashFlow) specialize by the
       conservation and reversibility semantics of the quantum.
+
+      Flows come in two interaction shapes, distinguished by a single optional
+      field on the flow body:
+        - Handoff flows (no `returns:` field) transfer responsibility from
+          source to target. The source is done with the quantum once the flow
+          completes.
+        - Query flows (`returns: <ClassName>`) are request-response: the
+          source agent sends the quantum as a question and retains
+          responsibility for acting on the returned class. See
+          initial_design_draft.md §3.3 for the rationale.
+
+      Flow body shape is formally specified in `scont_meta.yaml` (class
+      `FlowBody`).
 
   InformationFlow:
     class_uri: scont:InformationFlow
@@ -103,4 +134,11 @@ classes:
       transitions between them (optionally with triggers and guards), an
       initial state, and terminal states. Referenced from flows by
       `lifecycle_ref`. Instances carry a `scont:state_machine` annotation
-      with fields: states, transitions, initial, terminal.
+      whose shape is formally specified in `scont_meta.yaml` (classes
+      `StateMachineBody` and `TransitionBody`).
+
+      Transitions can carry a `guard` field naming an axiom that must pass
+      before the transition fires. By convention, the guard string matches
+      an axiom name declared on the parent flow or a class in scope; the
+      exploder enforces this resolution at load time (see
+      initial_design_draft.md §11 and §4's "Two reasoning modes").

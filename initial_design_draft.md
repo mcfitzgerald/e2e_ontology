@@ -111,9 +111,15 @@ Usually they move in lockstep. But they can diverge (retries, orchestrator-initi
 
 Enforcement is schematic: a flow **must** have a quantum, a trigger, and a direction. If you can't name those, you have a relation, not a flow. The exploder catches this trivially.
 
-#### Query flows vs handoff flows — not an ontology distinction
+#### Query flows vs handoff flows — declared via `returns:`
 
-Some flows transfer responsibility from source to target (a *handoff*: procurement hands a PO off to supplier_management). Others are request-response: an agent asks another role a question and *retains* responsibility (supply_planning asks logistics_planning for an OTIF exposure calculation and uses the answer in its own decision). We considered distinguishing these at the schema level and decided not to. The ontology's job is to declare that a flow exists between two roles, carrying a quantum of a given type. Whether the source agent fires-and-forgets or waits for a response is *agent execution semantics*, not ontology structure — same category as "synchronous vs. asynchronous" or "REST vs. gRPC." The `llm_prompt_hint` on the flow and the shape of the quantum convey the interaction pattern to the consuming agent. If this proves insufficient, a `flow_mode: handoff | query` annotation is a one-line backward-compatible addition — but the POC does not need it.
+Some flows transfer responsibility from source to target (a *handoff*: procurement hands a PO off to supplier_management). Others are request-response: an agent asks another role a question and *retains* responsibility (supply_planning asks logistics_planning for an OTIF exposure calculation and uses the answer in its own decision). We revisited this after the early POC made clear that agent teams in a separate repo will read the ontology cold, where a prose-only signal ("the hint tells you it's a query") is not robust enough.
+
+**Decision: the flow body carries an optional `returns: <ClassName>` field.** Presence → query flow, and the response shape is the named class. Absence → handoff flow. This is an explicit, machine-validatable schema signal: the exploder resolves `returns:` to a declared class and errors if it does not. The `returns:` field is defined in `scont_meta.yaml` (`FlowBody`) and surfaced on `ResolvedFlow.body.returns`. Query flows are still modeled as `InformationFlow` at the LinkML level — the distinction is purely a field on the flow body, not a subclass or a new tag.
+
+The `llm_prompt_hint` on a query flow still documents *how* the response flows (synchronous, timeout, retries) because that is agent execution semantics and remains the orchestrator's concern. The schema declares *what* the response is; the hint describes *how* to use it. Both stay in scope.
+
+The earlier draft's "non-decision" (hint is the only signal) is superseded by this decision.
 
 ### 3.4 Axiom
 

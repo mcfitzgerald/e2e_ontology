@@ -1,0 +1,17 @@
+# linkml-lint config for the e2e_ontology POC.
+#
+# The `standard_naming` rule expects CamelCase class names and snake_case
+# slot names. Our scont-tagged classes (roles, events, flows, state
+# machines) use snake_case by intentional convention because they
+# represent functions, events, and flows in the domain rather than OO
+# classes. Plain entities (ProcurementRequest, Supplier, etc.) do follow
+# CamelCase.
+#
+# The blanket disable of `standard_naming` is the POC answer. A richer
+# future linter plugin could whitelist only scont-tagged classes.
+
+extends: recommended
+
+rules:
+  standard_naming:
+    level: disabled
