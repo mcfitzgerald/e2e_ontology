@@ -13,18 +13,30 @@ class TestDemoParity:
 
     def test_counts(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
-        assert len(ontology.entities) == 4
+        # Post-Phase-D: original 4 + 7 core promo-whiplash entities (D1-D7)
+        # + 5 query request/response entities (D8) = 16
+        assert len(ontology.entities) == 16
         # Post-Phase-C: supply_planning, production_planning, logistics_planning
         # (internal) + customer_development, co_manufacturing (boundary)
         assert len(ontology.roles) == 8
         assert len(ontology.events) == 4
         assert len(ontology.state_machines) == 2
         assert len(ontology.flows) == 3
-        assert len(ontology.enums) == 3
+        # Post-Phase-D: +CommitmentStatus, +ProductionRequestStatus
+        assert len(ontology.enums) == 5
 
     def test_entity_names(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
-        assert set(ontology.entities.keys()) == {"ProcurementRequest", "Supplier", "SKU", "PurchaseOrder"}
+        assert set(ontology.entities.keys()) == {
+            # Pre-Phase-D (baseline procurement corridor)
+            "ProcurementRequest", "Supplier", "SKU", "PurchaseOrder",
+            # Phase D core entities
+            "TradePromotion", "ProductionLine", "RetailerCommitment",
+            "SupplyRequest", "ProductionRequest", "CapacityConflict", "OTIFExposure",
+            # Phase D query flow quantum + response entities
+            "OTIFQuery", "PromoFlexibilityQuery", "PromoFlexibility",
+            "ComanAvailabilityQuery", "ComanAvailability",
+        }
 
     def test_role_names(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
@@ -78,6 +90,42 @@ class TestDemoParity:
         sp = ontology.get_role("supply_planning")
         assert sp is not None
         assert sp.body.human_involvement == "conditional"
+
+    def test_phase_d_core_entities_present(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        expected_core = {
+            "TradePromotion",
+            "ProductionLine",
+            "RetailerCommitment",
+            "SupplyRequest",
+            "ProductionRequest",
+            "CapacityConflict",
+            "OTIFExposure",
+        }
+        assert expected_core.issubset(set(ontology.entities.keys()))
+
+    def test_phase_d_query_entities_present(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        expected_query_pairs = {
+            "OTIFQuery",
+            "PromoFlexibilityQuery",
+            "PromoFlexibility",
+            "ComanAvailabilityQuery",
+            "ComanAvailability",
+        }
+        assert expected_query_pairs.issubset(set(ontology.entities.keys()))
+
+    def test_production_request_references_line(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        pr = ontology.get_entity("ProductionRequest")
+        assert pr is not None
+        assert pr.attributes["assigned_line"]["range"] == "ProductionLine"
+
+    def test_capacity_conflict_references_commitments(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        cc = ontology.get_entity("CapacityConflict")
+        assert cc.attributes["at_risk_commitments"]["range"] == "RetailerCommitment"
+        assert cc.attributes["at_risk_commitments"].get("multivalued") is True
 
     def test_supplier_metric_parsed(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)

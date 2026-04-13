@@ -200,6 +200,367 @@ classes:
         required: true
 
   # --------------------------------------------------------------------------
+  # Promo whiplash entities — Phase D
+  # ==========================================================================
+  # These entities are the quanta and supporting objects for the promo
+  # whiplash cascade. Slot designs were chosen alongside the axioms and
+  # flows that traverse them (see demo_narrative.md and initial_design_draft.md
+  # §7). All are plain entities (no `instantiates:`).
+  # --------------------------------------------------------------------------
+
+  TradePromotion:
+    description: >-
+      A retailer-facing trade promotion (BOGO, discount, multi-buy, etc.)
+      that enters the supply chain through S&OP alignment. Quantum of
+      submit_promo_plan (customer_development → demand_planning). Downstream
+      agents read `commitment_status` to determine whether promo
+      renegotiation is a viable resolution path for capacity conflicts.
+    annotations:
+      scont:domain: commercial
+      scont:subdomain: trade_promotion
+    attributes:
+      promo_id:
+        description: "Unique promotion identifier"
+        range: string
+        required: true
+      sku:
+        description: "SKU the promo applies to"
+        range: SKU
+        required: true
+      retailer:
+        description: "Retailer name (Walmart, Target, Kroger, ...)"
+        range: string
+        required: true
+      volume_uplift_factor:
+        description: "Multiplier on baseline demand during the promo window (e.g. 3.0 for 3x)"
+        range: decimal
+        required: true
+      promo_start_day:
+        description: "Day (1-365) the promotion starts"
+        range: integer
+        required: true
+      promo_end_day:
+        description: "Day (1-365) the promotion ends"
+        range: integer
+        required: true
+      commitment_status:
+        description: "Negotiation/lifecycle status. check_promo_flexibility reads this to decide whether renegotiation is viable."
+        range: CommitmentStatus
+        required: true
+
+  ProductionLine:
+    description: >-
+      A manufacturing line at a specific plant with a rated weekly production
+      capacity. Referenced by ProductionRequest.assigned_line and read by the
+      line_capacity_not_exceeded axiom during capacity checks.
+    annotations:
+      scont:domain: manufacturing
+      scont:subdomain: capacity
+    attributes:
+      line_code:
+        description: "Line identifier within the plant"
+        range: string
+        required: true
+      plant_code:
+        description: "Plant the line belongs to"
+        range: string
+        required: true
+      rated_weekly_capacity:
+        description: "Maximum units producible per week on this line"
+        range: integer
+        required: true
+        minimum_value: 1
+      active:
+        range: boolean
+        required: true
+
+  RetailerCommitment:
+    description: >-
+      A standing replenishment commitment to a retailer for a given SKU,
+      with must-arrive-by window and OTIF penalty rate. Referenced by
+      CapacityConflict.at_risk_commitments and queried by check_otif_exposure
+      to quantify financial impact of delays.
+    annotations:
+      scont:domain: logistics
+      scont:subdomain: retailer_commitment
+    attributes:
+      commitment_id:
+        range: string
+        required: true
+      retailer:
+        description: "Retailer to whom this commitment is owed"
+        range: string
+        required: true
+      sku:
+        range: SKU
+        required: true
+      committed_volume:
+        description: "Units committed for delivery"
+        range: decimal
+        required: true
+      mabd_day:
+        description: "Must-arrive-by day (1-365). Shipping later triggers OTIF penalty."
+        range: integer
+        required: true
+      otif_penalty_rate:
+        description: "Fraction of COGS charged per OTIF violation (e.g., 0.03 for 3%)"
+        range: decimal
+        required: true
+
+  SupplyRequest:
+    description: >-
+      Revised demand signal emitted by demand_planning to supply_planning
+      after a forecast revision (triggered by a promo or an anomaly).
+      Supply_planning consumes this to decide where and how to fulfill.
+      Quantum of submit_supply_request.
+    annotations:
+      scont:domain: supply_netops
+      scont:subdomain: supply_request
+    attributes:
+      request_id:
+        range: string
+        required: true
+      sku:
+        range: SKU
+        required: true
+      volume:
+        description: "Units needed"
+        range: decimal
+        required: true
+      required_by:
+        description: "Day (1-365) by which supply must be in position"
+        range: integer
+        required: true
+      source_signal_ref:
+        description: "Free-text reference to the upstream signal (promo_id, anomaly_id, etc.)"
+        range: string
+
+  ProductionRequest:
+    description: >-
+      Production assignment emitted by supply_planning to production_planning
+      after network-level decision (which plant, which line). Quantum of
+      request_production. The line_capacity_not_exceeded axiom traverses
+      {quantum.assigned_line.rated_weekly_capacity} against total scheduled
+      production for the window.
+    annotations:
+      scont:domain: supply_netops
+      scont:subdomain: production_request
+    attributes:
+      request_id:
+        range: string
+        required: true
+      sku:
+        range: SKU
+        required: true
+      volume:
+        range: decimal
+        required: true
+      window_start_day:
+        description: "Day (1-365) the production window opens"
+        range: integer
+        required: true
+      window_end_day:
+        range: integer
+        required: true
+      assigned_plant:
+        description: "Plant code assigned by supply_planning"
+        range: string
+        required: true
+      assigned_line:
+        description: "Specific line on the assigned plant"
+        range: ProductionLine
+        required: true
+      status:
+        range: ProductionRequestStatus
+        required: true
+
+  CapacityConflict:
+    description: >-
+      Structured description of a line capacity conflict emitted by
+      production_planning to supply_planning via escalate_capacity_conflict.
+      Carries everything supply_planning needs to begin cross-domain context
+      assembly: which line, which competing SKUs, how much shortfall, which
+      retailer commitments are at risk.
+    annotations:
+      scont:domain: manufacturing
+      scont:subdomain: capacity_conflict
+    attributes:
+      conflict_id:
+        range: string
+        required: true
+      line_ref:
+        description: "The line where the conflict was detected"
+        range: ProductionLine
+        required: true
+      competing_skus:
+        description: "SKUs that together exceed line capacity in the window"
+        range: SKU
+        multivalued: true
+        required: true
+      shortfall_units:
+        description: "Units by which scheduled production exceeds capacity"
+        range: decimal
+        required: true
+      at_risk_commitments:
+        description: "Retailer commitments that would be violated if production slips"
+        range: RetailerCommitment
+        multivalued: true
+      window_start_day:
+        range: integer
+        required: true
+      window_end_day:
+        range: integer
+        required: true
+
+  OTIFExposure:
+    description: >-
+      Logistics' quantified answer to check_otif_exposure: for a given SKU,
+      retailer, and delay scenario, what is the financial penalty exposure?
+      Returns class of check_otif_exposure. Consumed by supply_planning
+      during Scene 5 cross-domain context assembly.
+    annotations:
+      scont:domain: logistics
+      scont:subdomain: otif
+    attributes:
+      retailer:
+        range: string
+        required: true
+      sku:
+        range: SKU
+        required: true
+      delay_days:
+        description: "Assumed shipment delay relative to MABD"
+        range: integer
+        required: true
+      affected_shipment_value:
+        description: "Dollar value of shipments that would miss MABD"
+        range: decimal
+        required: true
+      calculated_penalty:
+        description: "affected_shipment_value × otif_penalty_rate"
+        range: decimal
+        required: true
+
+  # --------------------------------------------------------------------------
+  # Query flow quantum + response entities (Phase D8)
+  # --------------------------------------------------------------------------
+
+  OTIFQuery:
+    description: >-
+      Question payload carried on check_otif_exposure from supply_planning
+      to logistics_planning: "if SKU X ships N days late to retailer Y,
+      what is the exposure?" Quantum of check_otif_exposure (paired with
+      returns: OTIFExposure).
+    annotations:
+      scont:domain: logistics
+      scont:subdomain: otif
+    attributes:
+      sku:
+        range: SKU
+        required: true
+      retailer:
+        range: string
+        required: true
+      proposed_delay_days:
+        description: "Hypothetical delay to evaluate"
+        range: integer
+        required: true
+
+  PromoFlexibilityQuery:
+    description: >-
+      Question payload on check_promo_flexibility from supply_planning to
+      customer_development: "can we shift timing or reduce volume on the
+      promo?" Quantum of check_promo_flexibility (paired with returns:
+      PromoFlexibility).
+    annotations:
+      scont:domain: commercial
+      scont:subdomain: trade_promotion
+    attributes:
+      promo_id:
+        range: string
+        required: true
+      proposed_change_kind:
+        description: "shift_timing | reduce_volume | cancel"
+        range: string
+        required: true
+
+  PromoFlexibility:
+    description: >-
+      Customer development's answer to check_promo_flexibility. Exposes the
+      promo's commitment_status and which kinds of changes are negotiable
+      given the retailer relationship. Returns class of check_promo_flexibility.
+    annotations:
+      scont:domain: commercial
+      scont:subdomain: trade_promotion
+    attributes:
+      promo_id:
+        range: string
+        required: true
+      commitment_status:
+        range: CommitmentStatus
+        required: true
+      can_shift_timing:
+        range: boolean
+        required: true
+      can_reduce_volume:
+        range: boolean
+        required: true
+      notes:
+        description: "Free-text context (e.g., relationship sensitivity)"
+        range: string
+
+  ComanAvailabilityQuery:
+    description: >-
+      Question payload on check_coman_availability from supply_planning to
+      co_manufacturing: "is a qualified co-man available to produce SKU X
+      volume in window Y?" Quantum of check_coman_availability (paired with
+      returns: ComanAvailability).
+    annotations:
+      scont:domain: manufacturing
+      scont:subdomain: co_manufacturing
+    attributes:
+      sku:
+        range: SKU
+        required: true
+      volume:
+        range: decimal
+        required: true
+      window_start_day:
+        range: integer
+        required: true
+      window_end_day:
+        range: integer
+        required: true
+
+  ComanAvailability:
+    description: >-
+      Co-manufacturing's answer to check_coman_availability. Exposes
+      qualification status, capacity availability in the requested window,
+      and premium cost. Returns class of check_coman_availability. A
+      positive answer makes shift_to_coman a viable resolution path.
+    annotations:
+      scont:domain: manufacturing
+      scont:subdomain: co_manufacturing
+    attributes:
+      sku:
+        range: SKU
+        required: true
+      is_qualified:
+        description: "True if this co-man is already qualified for the SKU"
+        range: boolean
+        required: true
+      has_capacity:
+        description: "True if the co-man can accept the volume in the requested window"
+        range: boolean
+        required: true
+      premium_cost_per_unit:
+        description: "Incremental cost above internal production, per unit"
+        range: decimal
+      lead_time_days:
+        description: "Days from shift_to_coman acceptance to first output"
+        range: integer
+
+  # --------------------------------------------------------------------------
   # Roles — meta-typed, lightweight tag + JSON annotation
   # --------------------------------------------------------------------------
 
@@ -495,3 +856,34 @@ enums:
       acknowledged:
       fulfilled:
       cancelled:
+
+  CommitmentStatus:
+    description: >-
+      Lifecycle and negotiation status for a TradePromotion. Read by
+      check_promo_flexibility to determine whether promo renegotiation is a
+      valid resolution path for downstream capacity conflicts.
+    permissible_values:
+      proposed:
+        description: "Commercial is exploring with the retailer; not yet aligned through S&OP."
+      aligned:
+        description: "S&OP alignment complete; supply chain has accepted the promo plan but not yet committed."
+      committed:
+        description: "Commercial and supply chain have both committed; changes require formal renegotiation."
+      contractually_locked:
+        description: "Changes are not possible without material commercial consequences; renegotiation is off the table."
+
+  ProductionRequestStatus:
+    description: "Lifecycle state of a ProductionRequest within ProductionRequestLifecycle."
+    permissible_values:
+      requested:
+        description: "Supply_planning has emitted the request; production_planning has not yet confirmed."
+      assigned:
+        description: "Production_planning has accepted; line and sequence assigned."
+      scheduled:
+        description: "Firmly on the line schedule."
+      in_production:
+        description: "Production is actively running."
+      completed:
+        description: "Units produced, ready for downstream fulfillment."
+      cancelled:
+        description: "Cancelled before or during production."
