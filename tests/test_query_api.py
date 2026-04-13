@@ -95,6 +95,7 @@ class TestMisc:
         assert "approved" in to_states
         assert "rejected" in to_states
 
-    def test_list_boundary_roles_demo_has_none(self, loaded_demo):
-        # Current demo has no boundary roles yet; promo whiplash will add them
-        assert loaded_demo.list_boundary_roles() == []
+    def test_list_boundary_roles(self, loaded_demo):
+        # Post-Phase-C: customer_development and co_manufacturing are boundary roles
+        boundary_names = {r.name for r in loaded_demo.list_boundary_roles()}
+        assert boundary_names == {"customer_development", "co_manufacturing"}

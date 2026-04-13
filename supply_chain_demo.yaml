@@ -244,6 +244,48 @@ classes:
           "human_involvement": "conditional"
         }
 
+  production_planning:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: manufacturing
+      scont:role: >-
+        {
+          "description": "Owns plant line schedules and executes assigned production. Checks line capacity against requested volume, sequences jobs, and emits capacity_conflict_detected when total demand exceeds rated capacity.",
+          "llm_prompt_hint": "Target role for request_production. Reads ProductionRequest.assigned_line and checks it against the line's rated_weekly_capacity for the requested window (the line_capacity_not_exceeded axiom). On capacity shortfall, emits a CapacityConflict via escalate_capacity_conflict back to supply_planning — does NOT attempt to resolve trade-offs locally. On happy path, the production proceeds and ProductionRequestLifecycle advances."
+        }
+
+  logistics_planning:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: logistics
+      scont:role: >-
+        {
+          "description": "Owns warehousing, transportation, and delivery compliance (OTIF). Calculates penalty exposure for at-risk retailer commitments and plans fulfillment after supply_planning makes a resolution decision.",
+          "llm_prompt_hint": "Participates in two patterns. (1) Query pattern: receives check_otif_exposure from supply_planning and returns an OTIFExposure describing the penalty impact if a SKU ships N days late. (2) Handoff pattern: receives plan_fulfillment after a resolution is chosen and updates the distribution plan to reflect split sourcing or revised timing. Knows the retailer MABD windows and OTIF penalty rates; this is where financial exposure gets quantified for cross-domain trade-off reasoning."
+        }
+
+  customer_development:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: commercial
+      scont:role: >-
+        {
+          "description": "Boundary role representing the commercial / customer development function that negotiates trade promotions with retailers. External to the supply chain; the ontology does not model its internals.",
+          "llm_prompt_hint": "Signals ENTER the supply chain from here: a TradePromotion aligned through S&OP arrives via submit_promo_plan, addressed to demand_planning. Can receive request_promo_revision when supply_planning asks for timing or volume changes (resolution path), and responds to check_promo_flexibility queries by exposing the TradePromotion.commitment_status field. Because this role is a boundary role, agents should treat its actions as coming from outside the orchestration envelope and plan commitment-level negotiation, not workflow orchestration.",
+          "is_boundary": true
+        }
+
+  co_manufacturing:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: manufacturing
+      scont:role: >-
+        {
+          "description": "Boundary role representing an external contract manufacturer qualified to produce specific SKUs on demand. External to the supply chain; the ontology does not model its internals.",
+          "llm_prompt_hint": "Receives volume shifts when supply_planning routes production out of internal plants via shift_to_coman — typically to protect another SKU's commitments when internal line capacity is exceeded. Responds to check_coman_availability queries with availability + premium-cost estimates. Treat as external: qualification status, lead times for onboarding, and commercial terms are outside the ontology's modeling scope.",
+          "is_boundary": true
+        }
+
   # --------------------------------------------------------------------------
   # Event — what triggers the flow
   # --------------------------------------------------------------------------

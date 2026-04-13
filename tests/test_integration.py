@@ -14,8 +14,10 @@ class TestDemoParity:
     def test_counts(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
         assert len(ontology.entities) == 4
-        assert len(ontology.roles) == 4  # +supply_planning
-        assert len(ontology.events) == 4  # +production_assigned
+        # Post-Phase-C: supply_planning, production_planning, logistics_planning
+        # (internal) + customer_development, co_manufacturing (boundary)
+        assert len(ontology.roles) == 8
+        assert len(ontology.events) == 4
         assert len(ontology.state_machines) == 2
         assert len(ontology.flows) == 3
         assert len(ontology.enums) == 3
@@ -31,7 +33,16 @@ class TestDemoParity:
             "procurement",
             "supplier_management",
             "supply_planning",
+            "production_planning",
+            "logistics_planning",
+            "customer_development",
+            "co_manufacturing",
         }
+
+    def test_boundary_roles_identified(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        boundary_names = {r.name for r in ontology.list_boundary_roles()}
+        assert boundary_names == {"customer_development", "co_manufacturing"}
 
     def test_flow_names(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
