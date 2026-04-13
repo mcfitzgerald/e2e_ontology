@@ -19,8 +19,10 @@ class TestDemoParity:
         # Post-Phase-C: supply_planning, production_planning, logistics_planning
         # (internal) + customer_development, co_manufacturing (boundary)
         assert len(ontology.roles) == 8
-        assert len(ontology.events) == 4
-        assert len(ontology.state_machines) == 2
+        # Post-Phase-E: + promo_plan_aligned, forecast_revised, capacity_conflict_detected
+        assert len(ontology.events) == 7
+        # Post-Phase-E: + ProductionRequestLifecycle, TradePromotionLifecycle
+        assert len(ontology.state_machines) == 4
         assert len(ontology.flows) == 3
         # Post-Phase-D: +CommitmentStatus, +ProductionRequestStatus
         assert len(ontology.enums) == 5
@@ -126,6 +128,25 @@ class TestDemoParity:
         cc = ontology.get_entity("CapacityConflict")
         assert cc.attributes["at_risk_commitments"]["range"] == "RetailerCommitment"
         assert cc.attributes["at_risk_commitments"].get("multivalued") is True
+
+    def test_phase_e_events_observed_by_right_roles(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        assert ontology.get_event("promo_plan_aligned").body.observed_by == "customer_development"
+        assert ontology.get_event("forecast_revised").body.observed_by == "demand_planning"
+        assert ontology.get_event("capacity_conflict_detected").body.observed_by == "production_planning"
+
+    def test_phase_e_fsms_structurally_sound(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        prl = ontology.get_state_machine("ProductionRequestLifecycle")
+        assert prl is not None
+        assert prl.body.initial == "requested"
+        assert "completed" in prl.body.terminal
+        assert "cancelled" in prl.body.terminal
+
+        tpl = ontology.get_state_machine("TradePromotionLifecycle")
+        assert tpl is not None
+        assert tpl.body.initial == "proposed"
+        assert "completed" in tpl.body.terminal
 
     def test_supplier_metric_parsed(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)

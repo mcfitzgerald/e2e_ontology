@@ -712,6 +712,49 @@ classes:
           "terminal": ["fulfilled", "cancelled"]
         }
 
+  ProductionRequestLifecycle:
+    instantiates: [scont:StateMachine]
+    annotations:
+      scont:domain: manufacturing
+      scont:state_machine: >-
+        {
+          "states": ["requested", "assigned", "scheduled", "in_production", "completed", "cancelled"],
+          "transitions": [
+            {"from_state": "requested",     "to_state": "assigned",      "trigger": "assign",         "guard": null},
+            {"from_state": "assigned",      "to_state": "scheduled",     "trigger": "schedule",       "guard": null},
+            {"from_state": "scheduled",     "to_state": "in_production", "trigger": "start",          "guard": null},
+            {"from_state": "in_production", "to_state": "completed",     "trigger": "finish",         "guard": null},
+            {"from_state": "requested",     "to_state": "cancelled",     "trigger": "cancel",         "guard": null},
+            {"from_state": "assigned",      "to_state": "cancelled",     "trigger": "cancel",         "guard": null},
+            {"from_state": "scheduled",     "to_state": "cancelled",     "trigger": "cancel",         "guard": null}
+          ],
+          "initial":  "requested",
+          "terminal": ["completed", "cancelled"]
+        }
+
+  TradePromotionLifecycle:
+    instantiates: [scont:StateMachine]
+    annotations:
+      scont:domain: commercial
+      scont:state_machine: >-
+        {
+          "states": ["proposed", "aligned", "committed", "executing", "completed", "revised", "cancelled"],
+          "transitions": [
+            {"from_state": "proposed",  "to_state": "aligned",   "trigger": "sop_align",   "guard": null},
+            {"from_state": "aligned",   "to_state": "committed", "trigger": "commit",      "guard": null},
+            {"from_state": "committed", "to_state": "executing", "trigger": "launch",      "guard": null},
+            {"from_state": "executing", "to_state": "completed", "trigger": "end",         "guard": null},
+            {"from_state": "aligned",   "to_state": "revised",   "trigger": "renegotiate", "guard": null},
+            {"from_state": "committed", "to_state": "revised",   "trigger": "renegotiate", "guard": null},
+            {"from_state": "revised",   "to_state": "aligned",   "trigger": "re_align",    "guard": null},
+            {"from_state": "proposed",  "to_state": "cancelled", "trigger": "cancel",      "guard": null},
+            {"from_state": "aligned",   "to_state": "cancelled", "trigger": "cancel",      "guard": null},
+            {"from_state": "committed", "to_state": "cancelled", "trigger": "cancel",      "guard": null}
+          ],
+          "initial":  "proposed",
+          "terminal": ["completed", "cancelled"]
+        }
+
   # --------------------------------------------------------------------------
   # Flow — the happy path
   # --------------------------------------------------------------------------
@@ -810,7 +853,7 @@ classes:
         {
           "description": "Procurement determined a request cannot be satisfied as drafted — typically due to lead time, supply constraints, or budget.",
           "observed_by": "procurement",
-          "llm_prompt_hint": "Emitted when a blocking axiom on submit_procurement_request fires. Triggers replan_on_infeasible_request to route back to demand_planning."
+          "llm_prompt_hint": "Emitted when a blocking axiom on submit_procurement_request fires. Triggers replan_on_infeasible_request to route back to supply_planning, which owns the cross-domain trade-off and may re-engage demand_planning if timing or quantity need to change."
         }
 
   po_drafted:
@@ -822,6 +865,43 @@ classes:
           "description": "Procurement has drafted a PurchaseOrder ready to transmit to a supplier.",
           "observed_by": "procurement",
           "llm_prompt_hint": "Fires after procurement successfully resolves a ProcurementRequest into a concrete PurchaseOrder — i.e. after the respect_lead_time axiom passes and the quantum reaches the approved state. Triggers submit_po_to_supplier to hand the PO off to supplier_management."
+        }
+
+  # --------------------------------------------------------------------------
+  # Events — Phase E additions for the promo whiplash narrative
+  # --------------------------------------------------------------------------
+
+  promo_plan_aligned:
+    instantiates: [scont:Event]
+    annotations:
+      scont:domain: commercial
+      scont:event: >-
+        {
+          "description": "A trade promotion has been aligned through S&OP — commercial and supply chain agree on volume, window, and target retailer. The TradePromotion quantum is ready to enter the supply chain.",
+          "observed_by": "customer_development",
+          "llm_prompt_hint": "The S&OP boundary event. Emitted when commercial and supply chain complete alignment; triggers submit_promo_plan (customer_development → demand_planning) carrying the TradePromotion. This is the canonical signal-entering-the-supply-chain moment and the pattern generalizes to any external signal source (see initial_design_draft.md §3.1 boundary role pattern)."
+        }
+
+  forecast_revised:
+    instantiates: [scont:Event]
+    annotations:
+      scont:domain: demand
+      scont:event: >-
+        {
+          "description": "Demand_planning has updated the forecast for a SKU in response to a demand_anomaly_detected or a promo_plan_aligned signal. The revised forecast is ready to drive downstream fulfillment decisions.",
+          "observed_by": "demand_planning",
+          "llm_prompt_hint": "Triggers submit_supply_request from demand_planning to supply_planning. Unlike the older topology where demand_planning fanned out to procurement directly, the revised forecast now goes through supply/netops, which decides where and how to fulfill."
+        }
+
+  capacity_conflict_detected:
+    instantiates: [scont:Event]
+    annotations:
+      scont:domain: manufacturing
+      scont:event: >-
+        {
+          "description": "Production_planning has detected a line capacity conflict — total scheduled production on a line exceeds its rated weekly capacity for a window. The blocking line_capacity_not_exceeded axiom has fired.",
+          "observed_by": "production_planning",
+          "llm_prompt_hint": "Fires when the line_capacity_not_exceeded axiom blocks on request_production. Triggers escalate_capacity_conflict, carrying a CapacityConflict quantum that enumerates the competing SKUs, the shortfall, and the at-risk retailer commitments. Supply_planning consumes this as the entry point into cross-domain context assembly (see initial_design_draft.md §4 'Two reasoning modes' — Mode 2)."
         }
 
 # ============================================================================
