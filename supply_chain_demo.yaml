@@ -206,10 +206,11 @@ classes:
   demand_planning:
     instantiates: [scont:Role]
     annotations:
+      scont:domain: demand
       scont:role: >-
         {
           "description": "Forecasts demand, detects anomalies, revises plans.",
-          "llm_prompt_hint": "This role owns demand-side signals. When an anomaly is detected it emits a ProcurementRequest quantum to procurement via submit_procurement_request. If procurement finds the request infeasible, this role receives a ReplanRequest back and must revise the forecast or timing."
+          "llm_prompt_hint": "This role owns demand-side signals. On a demand_anomaly_detected event (or an aligned promo plan) it revises the forecast and emits a SupplyRequest to supply_planning — it does NOT drive procurement directly. When supply_planning signals that a request cannot be satisfied it may re-engage this role for forecast / timing / quantity revision."
         }
 
   procurement:
@@ -219,7 +220,7 @@ classes:
       scont:role: >-
         {
           "description": "Sources materials, drafts purchase orders, manages supplier relationships.",
-          "llm_prompt_hint": "Target role for submit_procurement_request. Consumes a ProcurementRequest quantum, resolves a supplier, and drafts a PO. Must respect supplier lead times (enforced by the respect_lead_time axiom on the flow). If the axiom blocks, procurement emits a ReplanRequest back to demand_planning via replan_on_infeasible_request. On happy path, emits a po_drafted event and hands the PurchaseOrder off to supplier_management via submit_po_to_supplier."
+          "llm_prompt_hint": "Target role for submit_procurement_request. Consumes a ProcurementRequest quantum emitted by supply_planning (after it decides where to fulfill), resolves a supplier, and drafts a PO. Must respect supplier lead times (enforced by the respect_lead_time axiom on the flow). If the axiom blocks, procurement emits a replan back to supply_planning via replan_on_infeasible_request — supply_planning owns the trade-off and may re-engage demand_planning. On happy path, emits a po_drafted event and hands the PurchaseOrder off to supplier_management via submit_po_to_supplier."
         }
 
   supplier_management:
@@ -232,6 +233,17 @@ classes:
           "llm_prompt_hint": "Target role for submit_po_to_supplier. Receives a drafted PurchaseOrder quantum from procurement and is responsible for transmission, acknowledgment tracking, and fulfillment confirmation. NOT the supplier itself — this is the role that talks TO suppliers."
         }
 
+  supply_planning:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: supply_netops
+      scont:role: >-
+        {
+          "description": "Network-level planning function with cross-plant / cross-co-man / cross-DC visibility. Mediates between demand and execution: decides where and how to fulfill, assigns production to plants, and is the hub for cross-domain conflict resolution.",
+          "llm_prompt_hint": "Receives SupplyRequest from demand_planning and fans out to procurement (raw materials) and production_planning (capacity). When manufacturing escalates a capacity conflict, this role assembles cross-domain context (OTIF exposure from logistics, promo flexibility from commercial, co-man availability) and either resolves autonomously or surfaces the decision to a human — see initial_design_draft.md §3.7 for the autonomy envelope. Trade-off reasoning happens here, not in the orchestrator.",
+          "human_involvement": "conditional"
+        }
+
   # --------------------------------------------------------------------------
   # Event — what triggers the flow
   # --------------------------------------------------------------------------
@@ -239,11 +251,23 @@ classes:
   demand_anomaly_detected:
     instantiates: [scont:Event]
     annotations:
+      scont:domain: demand
       scont:event: >-
         {
           "description": "A statistically significant departure from forecast for a SKU.",
           "observed_by": "demand_planning",
-          "llm_prompt_hint": "Fires when the demand signal for a SKU deviates materially from forecast. This is the trigger for submit_procurement_request. In the POC this event is externally simulated; in production it would be emitted by an anomaly-detection component downstream of demand planning."
+          "llm_prompt_hint": "Fires when the demand signal for a SKU deviates materially from forecast. Consumed by demand_planning to kick off forecast revision, which may in turn emit a SupplyRequest to supply_planning. In the POC this event is externally simulated; in production it would be emitted by an anomaly-detection component downstream of demand planning."
+        }
+
+  production_assigned:
+    instantiates: [scont:Event]
+    annotations:
+      scont:domain: supply_netops
+      scont:event: >-
+        {
+          "description": "Supply planning has assigned production for a SKU to a specific plant/line and triggered the downstream procurement and production flows.",
+          "observed_by": "supply_planning",
+          "llm_prompt_hint": "Emitted by supply_planning once it has decided where to fulfill. Triggers submit_procurement_request (raw materials) and future request_production (capacity). This is the 'all procurement goes through supply/netops' handoff point."
         }
 
   # --------------------------------------------------------------------------
@@ -258,10 +282,10 @@ classes:
         {
           "states": ["draft", "submitted", "approved", "rejected", "expired"],
           "transitions": [
-            {"from": "draft",     "to": "submitted", "trigger": "submit",   "guard": null},
-            {"from": "submitted", "to": "approved",  "trigger": "approve",  "guard": "respect_lead_time"},
-            {"from": "submitted", "to": "rejected",  "trigger": "reject",   "guard": null},
-            {"from": "submitted", "to": "expired",   "trigger": "timeout",  "guard": null}
+            {"from_state": "draft",     "to_state": "submitted", "trigger": "submit",   "guard": null},
+            {"from_state": "submitted", "to_state": "approved",  "trigger": "approve",  "guard": "respect_lead_time"},
+            {"from_state": "submitted", "to_state": "rejected",  "trigger": "reject",   "guard": null},
+            {"from_state": "submitted", "to_state": "expired",   "trigger": "timeout",  "guard": null}
           ],
           "initial":  "draft",
           "terminal": ["approved", "rejected", "expired"]
@@ -275,11 +299,11 @@ classes:
         {
           "states": ["draft", "transmitted", "acknowledged", "fulfilled", "cancelled"],
           "transitions": [
-            {"from": "draft",        "to": "transmitted",  "trigger": "transmit",       "guard": null},
-            {"from": "transmitted",  "to": "acknowledged", "trigger": "acknowledge",    "guard": null},
-            {"from": "acknowledged", "to": "fulfilled",    "trigger": "goods_received", "guard": null},
-            {"from": "draft",        "to": "cancelled",    "trigger": "cancel",         "guard": null},
-            {"from": "transmitted",  "to": "cancelled",    "trigger": "cancel",         "guard": null}
+            {"from_state": "draft",        "to_state": "transmitted",  "trigger": "transmit",       "guard": null},
+            {"from_state": "transmitted",  "to_state": "acknowledged", "trigger": "acknowledge",    "guard": null},
+            {"from_state": "acknowledged", "to_state": "fulfilled",    "trigger": "goods_received", "guard": null},
+            {"from_state": "draft",        "to_state": "cancelled",    "trigger": "cancel",         "guard": null},
+            {"from_state": "transmitted",  "to_state": "cancelled",    "trigger": "cancel",         "guard": null}
           ],
           "initial":  "draft",
           "terminal": ["fulfilled", "cancelled"]
@@ -292,12 +316,13 @@ classes:
   submit_procurement_request:
     instantiates: [scont:InformationFlow]
     annotations:
+      scont:domain: procurement
       scont:flow: >-
         {
-          "source_role":   "demand_planning",
+          "source_role":   "supply_planning",
           "target_role":   "procurement",
           "quantum":       "ProcurementRequest",
-          "trigger_event": "demand_anomaly_detected",
+          "trigger_event": "production_assigned",
           "lifecycle_ref": "RequestLifecycle"
         }
       scont:axioms: >-
@@ -314,11 +339,14 @@ classes:
           }
         ]
       scont:llm_prompt_hint: >-
-        Happy-path information flow from demand_planning to procurement. Fires on
-        demand_anomaly_detected with a ProcurementRequest quantum. The blocking
-        axiom respect_lead_time catches infeasible required-by dates and routes to
-        replan_on_infeasible_request on failure — the orchestrator should read the
-        axiom's on_failure_route_to field to find the recovery flow.
+        Handoff flow from supply_planning to procurement, carrying a
+        ProcurementRequest quantum. Fires on production_assigned after
+        supply_planning has decided where to fulfill. This is the "all procurement
+        goes through supply/netops" path — demand_planning no longer emits this
+        directly. The blocking axiom respect_lead_time catches infeasible
+        required-by dates and routes to replan_on_infeasible_request on failure;
+        the orchestrator should read the axiom's on_failure_route_to field to
+        find the recovery flow.
 
   # --------------------------------------------------------------------------
   # Flow — the unhappy-path recovery
@@ -331,7 +359,7 @@ classes:
       scont:flow: >-
         {
           "source_role":   "procurement",
-          "target_role":   "demand_planning",
+          "target_role":   "supply_planning",
           "quantum":       "ProcurementRequest",
           "trigger_event": "procurement_infeasible",
           "lifecycle_ref": "RequestLifecycle"
@@ -339,9 +367,11 @@ classes:
       scont:llm_prompt_hint: >-
         Recovery information flow. Fires when procurement cannot satisfy a
         ProcurementRequest (typically because the respect_lead_time axiom blocked
-        on submit_procurement_request). Routes the request back to demand_planning
-        for revision of the forecast, timing, or quantity. Reuses the same
-        ProcurementRequest quantum so the demand planning agent has full context.
+        on submit_procurement_request). Routes the request back to supply_planning,
+        which owns the cross-domain trade-off — it may re-engage demand_planning to
+        revise timing, shift sourcing to a different supplier, or choose another
+        resolution path depending on network state. Reuses the same
+        ProcurementRequest quantum so the supply planning agent has full context.
 
   # --------------------------------------------------------------------------
   # Flow — downstream procurement → supplier_management

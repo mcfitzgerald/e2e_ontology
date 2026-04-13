@@ -7,11 +7,15 @@ from exploder import load_ontology
 
 
 class TestDemoParity:
+    """Post-Phase-B topology: procurement routes through supply/netops.
+    demand_planning no longer drives procurement directly; supply_planning is
+    the hub that emits submit_procurement_request once production is assigned."""
+
     def test_counts(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
         assert len(ontology.entities) == 4
-        assert len(ontology.roles) == 3
-        assert len(ontology.events) == 3
+        assert len(ontology.roles) == 4  # +supply_planning
+        assert len(ontology.events) == 4  # +production_assigned
         assert len(ontology.state_machines) == 2
         assert len(ontology.flows) == 3
         assert len(ontology.enums) == 3
@@ -22,7 +26,12 @@ class TestDemoParity:
 
     def test_role_names(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
-        assert set(ontology.roles.keys()) == {"demand_planning", "procurement", "supplier_management"}
+        assert set(ontology.roles.keys()) == {
+            "demand_planning",
+            "procurement",
+            "supplier_management",
+            "supply_planning",
+        }
 
     def test_flow_names(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
@@ -35,15 +44,29 @@ class TestDemoParity:
     def test_submit_procurement_request_shape(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
         f = ontology.get_flow("submit_procurement_request")
-        assert f.body.source_role == "demand_planning"
+        # Post-Phase-B: sourced by supply_planning, triggered by production_assigned
+        assert f.body.source_role == "supply_planning"
         assert f.body.target_role == "procurement"
         assert f.body.quantum == "ProcurementRequest"
-        assert f.body.trigger_event == "demand_anomaly_detected"
+        assert f.body.trigger_event == "production_assigned"
         assert f.body.lifecycle_ref == "RequestLifecycle"
         assert f.body.returns is None  # not a query flow
         assert len(f.axioms) == 1
         assert f.axioms[0].name == "respect_lead_time"
         assert f.axioms[0].on_failure_route_to == "replan_on_infeasible_request"
+
+    def test_replan_routes_to_supply_planning(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        f = ontology.get_flow("replan_on_infeasible_request")
+        # Post-Phase-B: replan lands at supply_planning, not demand_planning
+        assert f.body.source_role == "procurement"
+        assert f.body.target_role == "supply_planning"
+
+    def test_supply_planning_carries_conditional_hitl(self, demo_yaml_path):
+        ontology = load_ontology(demo_yaml_path)
+        sp = ontology.get_role("supply_planning")
+        assert sp is not None
+        assert sp.body.human_involvement == "conditional"
 
     def test_supplier_metric_parsed(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)

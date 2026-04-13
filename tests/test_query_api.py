@@ -15,7 +15,8 @@ class TestGetters:
     def test_get_flow_existing(self, loaded_demo):
         f = loaded_demo.get_flow("submit_procurement_request")
         assert f is not None
-        assert f.body.source_role == "demand_planning"
+        # Post-Phase-B: sourced by supply_planning
+        assert f.body.source_role == "supply_planning"
 
     def test_get_flow_missing(self, loaded_demo):
         assert loaded_demo.get_flow("nonexistent") is None
@@ -55,7 +56,8 @@ class TestFlowFilters:
         assert flows[0].name == "submit_po_to_supplier"
 
     def test_filter_by_trigger(self, loaded_demo):
-        flows = loaded_demo.list_flows_where(trigger_event="demand_anomaly_detected")
+        # Post-Phase-B: submit_procurement_request is now triggered by production_assigned
+        flows = loaded_demo.list_flows_where(trigger_event="production_assigned")
         assert any(f.name == "submit_procurement_request" for f in flows)
 
     def test_no_filters_returns_all(self, loaded_demo):
