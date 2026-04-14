@@ -560,9 +560,52 @@ classes:
         description: "Days from shift_to_coman acceptance to first output"
         range: integer
 
+  DemandAnomaly:
+    description: >-
+      Structured payload describing a detected departure of realized or
+      incoming demand from forecast for a SKU. Quantum of raise_demand_anomaly
+      (demand_sensing → demand_planning). Carries enough context for
+      demand_planning to decide whether to revise the forecast and how
+      urgently. Symmetric to TradePromotion as an ingress quantum.
+    annotations:
+      scont:domain: demand
+      scont:subdomain: anomaly
+    attributes:
+      anomaly_id:
+        range: string
+        required: true
+      sku:
+        range: SKU
+        required: true
+      detected_day:
+        description: "Day (1-365) the anomaly was detected"
+        range: integer
+        required: true
+      departure_units:
+        description: "Signed units the realized/incoming demand deviates from forecast (positive = higher than forecast)"
+        range: decimal
+        required: true
+      severity_score:
+        description: "Detector confidence / magnitude score (0.0-1.0). Consumers decide their own thresholds."
+        range: decimal
+      source_system:
+        description: "Free-form identifier for the detector (POS stream, retailer EDI, social listening, etc.)"
+        range: string
+
   # --------------------------------------------------------------------------
   # Roles — meta-typed, lightweight tag + JSON annotation
   # --------------------------------------------------------------------------
+
+  demand_sensing:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: demand
+      scont:role: >-
+        {
+          "description": "Boundary role representing external demand-anomaly detection — POS streams, retailer EDI feeds, social listening, competitor signals, etc. Not modeled internally; the ontology treats it as the upstream source of DemandAnomaly quanta.",
+          "llm_prompt_hint": "Signals ENTER the supply chain from here as DemandAnomaly quanta via raise_demand_anomaly. Symmetric to customer_development: a boundary role whose role is to originate external signals into the orchestration envelope. Agents should treat demand_sensing outputs as facts-from-outside, not operations to orchestrate. In production, this stands in for an anomaly-detection pipeline; in the POC it is externally simulated.",
+          "is_boundary": true
+        }
 
   demand_planning:
     instantiates: [scont:Role]
@@ -720,7 +763,7 @@ classes:
         {
           "states": ["requested", "assigned", "scheduled", "in_production", "completed", "cancelled"],
           "transitions": [
-            {"from_state": "requested",     "to_state": "assigned",      "trigger": "assign",         "guard": null},
+            {"from_state": "requested",     "to_state": "assigned",      "trigger": "assign",         "guard": "line_capacity_not_exceeded"},
             {"from_state": "assigned",      "to_state": "scheduled",     "trigger": "schedule",       "guard": null},
             {"from_state": "scheduled",     "to_state": "in_production", "trigger": "start",          "guard": null},
             {"from_state": "in_production", "to_state": "completed",     "trigger": "finish",         "guard": null},
@@ -776,11 +819,11 @@ classes:
           {
             "name": "respect_lead_time",
             "scope": "flow",
-            "expr": "{quantum.required_by} >= today() + {quantum.supplier.lead_time}",
+            "expr": "{quantum.required_by} >= today() + {quantum.supplier.lead_time_days}",
             "nl":   "A procurement request's required-by date must not fall inside its supplier's lead time.",
             "severity": "blocking",
             "message":  "Required-by date is inside supplier lead time",
-            "references": {"metrics": ["supplier.lead_time"]},
+            "references": {"metrics": ["supplier_lead_time"]},
             "on_failure_route_to": "replan_on_infeasible_request"
           }
         ]
@@ -903,6 +946,299 @@ classes:
           "observed_by": "production_planning",
           "llm_prompt_hint": "Fires when the line_capacity_not_exceeded axiom blocks on request_production. Triggers escalate_capacity_conflict, carrying a CapacityConflict quantum that enumerates the competing SKUs, the shortfall, and the at-risk retailer commitments. Supply_planning consumes this as the entry point into cross-domain context assembly (see initial_design_draft.md §4 'Two reasoning modes' — Mode 2)."
         }
+
+  capacity_resolved:
+    instantiates: [scont:Event]
+    annotations:
+      scont:domain: supply_netops
+      scont:event: >-
+        {
+          "description": "Supply_planning has completed cross-domain context assembly for a CapacityConflict and chosen a resolution path (shift to co-man, reduce promo volume, accept OTIF penalty, resequence internal line, etc.). Downstream execution flows can now fire.",
+          "observed_by": "supply_planning",
+          "llm_prompt_hint": "Pivot event between Mode 2 context assembly and Mode 1 execution. Triggers plan_fulfillment (always) to update the logistics plan, and one resolution-execution flow depending on the chosen path: shift_to_coman (external production), request_promo_revision (promo renegotiation), or re_request_production (internal resolution — resequence line, shift window, reduce volume, split across lines). The originally blocked request_production does NOT auto-retry; re-entry of internal resolutions is via re_request_production carrying a REVISED ProductionRequest. The event marks 'decision made'; which execution flow fires depends on the resolution supply_planning picked."
+        }
+
+  # --------------------------------------------------------------------------
+  # Flows — Phase F: promo whiplash handoffs and query flows
+  # ==========================================================================
+  # F1 handoffs carry responsibility transfer between roles. F4 query flows
+  # carry request-response semantics signaled by the `returns` field on the
+  # flow body (see initial_design_draft.md §3.3). Together they let an agent
+  # traverse the full promo whiplash cascade: S&OP entry → forecast revision
+  # → network planning → capacity check → cross-domain context assembly →
+  # resolution → execution.
+  # --------------------------------------------------------------------------
+
+  submit_promo_plan:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: commercial
+      scont:flow: >-
+        {
+          "source_role":   "customer_development",
+          "target_role":   "demand_planning",
+          "quantum":       "TradePromotion",
+          "trigger_event": "promo_plan_aligned",
+          "lifecycle_ref": "TradePromotionLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Handoff flow that carries an aligned TradePromotion across the supply
+        chain boundary into demand_planning. Source role customer_development
+        is_boundary: true, so the orchestrator should treat the source side as
+        external — negotiation rather than orchestration. Downstream, demand_planning
+        incorporates the promo's volume_uplift_factor and window into a revised
+        forecast and emits forecast_revised, which drives submit_supply_request.
+
+  raise_demand_anomaly:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: demand
+      scont:flow: >-
+        {
+          "source_role":   "demand_sensing",
+          "target_role":   "demand_planning",
+          "quantum":       "DemandAnomaly",
+          "trigger_event": "demand_anomaly_detected"
+        }
+      scont:llm_prompt_hint: >-
+        Ingress flow for demand anomalies. Symmetric to submit_promo_plan: an
+        external boundary role (demand_sensing) hands a DemandAnomaly to
+        demand_planning. Demand_planning decides whether to revise the forecast
+        and, if so, emits forecast_revised, which drives submit_supply_request
+        downstream. Source role is_boundary: true — treat the anomaly as a
+        fact-from-outside, not an operation to orchestrate.
+
+  submit_supply_request:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: demand
+      scont:flow: >-
+        {
+          "source_role":   "demand_planning",
+          "target_role":   "supply_planning",
+          "quantum":       "SupplyRequest",
+          "trigger_event": "forecast_revised"
+        }
+      scont:llm_prompt_hint: >-
+        Handoff from demand_planning to supply_planning carrying the revised
+        demand signal as a SupplyRequest. This is the topology hinge: all
+        fulfillment decisions now flow through supply/netops, which chooses
+        between internal production (request_production), external production
+        (shift_to_coman), and procurement of raw materials (submit_procurement_request).
+        No lifecycle ref — SupplyRequest is consumed in place by supply_planning's
+        network-level decision logic, not tracked through a formal FSM.
+
+  request_production:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: supply_netops
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "production_planning",
+          "quantum":       "ProductionRequest",
+          "trigger_event": "production_assigned",
+          "lifecycle_ref": "ProductionRequestLifecycle"
+        }
+      scont:axioms: >-
+        [
+          {
+            "name": "line_capacity_not_exceeded",
+            "scope": "flow",
+            "expr": "sum_scheduled_units({quantum.assigned_line}, {quantum.window_start_day}, {quantum.window_end_day}) + {quantum.volume} <= {quantum.assigned_line.rated_weekly_capacity}",
+            "nl":   "Total scheduled production on the assigned line for the requested window must not exceed the line's rated weekly capacity.",
+            "severity": "blocking",
+            "message":  "Assigned line is over capacity for the requested window",
+            "references": {"classes": ["ProductionLine", "ProductionRequest"], "events": ["capacity_conflict_detected"]},
+            "on_failure_route_to": "escalate_capacity_conflict"
+          }
+        ]
+      scont:llm_prompt_hint: >-
+        Handoff from supply_planning to production_planning after the network-level
+        decision has selected a plant and line. Carries a ProductionRequest through
+        ProductionRequestLifecycle (requested → assigned → scheduled → in_production →
+        completed). The blocking line_capacity_not_exceeded axiom is also the guard
+        on the requested → assigned FSM transition: when it fires, the quantum does
+        NOT advance to assigned and the orchestrator follows on_failure_route_to
+        into escalate_capacity_conflict. capacity_conflict_detected is emitted as
+        part of that escalation.
+
+  re_request_production:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: supply_netops
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "production_planning",
+          "quantum":       "ProductionRequest",
+          "trigger_event": "capacity_resolved",
+          "lifecycle_ref": "ProductionRequestLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Internal-resolution re-entry flow. Fires on capacity_resolved when
+        supply_planning has chosen to keep production internal (resequenced line,
+        shifted window, reduced volume, split across lines) rather than shift to
+        co-man or renegotiate the promo. Carries a REVISED ProductionRequest that
+        incorporates the resolution; production_planning treats it as a fresh
+        assignment and re-enters ProductionRequestLifecycle at `requested`. The
+        line_capacity_not_exceeded guard on the `requested → assigned` transition
+        still applies via the shared lifecycle — supply_planning is expected to
+        have verified feasibility during Mode 2 context assembly so the guard
+        passes; if the revised plan still violates capacity, the guard fires and
+        the orchestrator follows its on_failure_route_to back into
+        escalate_capacity_conflict (which is a supply_planning bug). No axiom is
+        declared on this flow directly because the guard lives on the FSM; the
+        axiom itself is declared on request_production.
+
+  escalate_capacity_conflict:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: manufacturing
+      scont:flow: >-
+        {
+          "source_role":   "production_planning",
+          "target_role":   "supply_planning",
+          "quantum":       "CapacityConflict",
+          "trigger_event": "capacity_conflict_detected"
+        }
+      scont:llm_prompt_hint: >-
+        Recovery information flow. Fires when line_capacity_not_exceeded blocks on
+        request_production. Production_planning does NOT try to resolve the conflict
+        locally; it packages the competing SKUs, the shortfall, and the at-risk
+        RetailerCommitments into a CapacityConflict quantum and hands off to
+        supply_planning. Supply_planning is the hub for cross-domain resolution: it
+        fans out query flows (check_otif_exposure, check_promo_flexibility,
+        check_coman_availability) to assemble context, then fires capacity_resolved
+        once a path is chosen. See initial_design_draft.md §4 Mode 2.
+
+  shift_to_coman:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: manufacturing
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "co_manufacturing",
+          "quantum":       "ProductionRequest",
+          "trigger_event": "capacity_resolved",
+          "lifecycle_ref": "ProductionRequestLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Boundary-crossing handoff: supply_planning routes a ProductionRequest to an
+        external co-manufacturer when internal capacity can't absorb the volume.
+        Target role co_manufacturing is_boundary: true — the orchestrator treats
+        the receiving side as external. Fires only when the resolution chosen after
+        capacity_resolved is 'external production' (as opposed to promo renegotiation
+        or OTIF absorption). The quantum continues through ProductionRequestLifecycle
+        from outside the internal plant, with lifecycle state updates treated as
+        external signals crossing back in.
+
+  plan_fulfillment:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: logistics
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "logistics_planning",
+          "quantum":       "SupplyRequest",
+          "trigger_event": "capacity_resolved"
+        }
+      scont:llm_prompt_hint: >-
+        Handoff from supply_planning to logistics_planning after a resolution path
+        is chosen. Logistics updates the distribution plan (split sourcing, revised
+        timing, coman-origin shipments) to reflect the new supply picture. Always
+        fires on capacity_resolved, regardless of which resolution path was picked —
+        logistics needs the revised plan either way. Reuses the SupplyRequest
+        quantum so the logistics agent has the same demand signal supply_planning
+        started from.
+
+  request_promo_revision:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: commercial
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "customer_development",
+          "quantum":       "TradePromotion",
+          "lifecycle_ref": "TradePromotionLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Skeletal resolution path used when supply_planning concludes the cheapest
+        fix is to shrink or reschedule the promo itself. Hands a TradePromotion back
+        across the boundary to customer_development for renegotiation — this is NOT
+        an orchestrator-executable operation, it signals a commercial commitment to
+        open with the retailer. Success depends on TradePromotion.commitment_status
+        (proposed/aligned are negotiable; committed requires formal renegotiation;
+        contractually_locked closes this path). No trigger_event: this flow fires
+        as a judgment call by supply_planning's agent during Mode 2 context assembly,
+        not on a deterministic event.
+
+  # --------------------------------------------------------------------------
+  # Query flows (Phase F4) — request-response. `returns:` declares response shape.
+  # --------------------------------------------------------------------------
+
+  check_otif_exposure:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: logistics
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "logistics_planning",
+          "quantum":       "OTIFQuery",
+          "returns":       "OTIFExposure"
+        }
+      scont:llm_prompt_hint: >-
+        Query flow fired by supply_planning during Mode 2 context assembly after a
+        CapacityConflict lands. Asks logistics_planning to quantify financial
+        exposure if a given SKU ships a given number of days late to a given
+        retailer. `returns: OTIFExposure` is the machine-validatable signal that
+        this is request-response; the agent should wait for the response before
+        choosing a resolution path. No trigger_event because this is ad-hoc during
+        cross-domain reasoning. Complements check_promo_flexibility and
+        check_coman_availability as the three canonical context-assembly queries.
+
+  check_promo_flexibility:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: commercial
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "customer_development",
+          "quantum":       "PromoFlexibilityQuery",
+          "returns":       "PromoFlexibility"
+        }
+      scont:llm_prompt_hint: >-
+        Boundary-crossing query flow. Supply_planning asks customer_development
+        whether a trade promotion can be shifted, reduced, or cancelled. Target role
+        is_boundary: true — the response is a read on retailer-relationship
+        sensitivity plus the promo's commitment_status, not a commitment to act.
+        `returns: PromoFlexibility` signals request-response semantics. Used during
+        Mode 2 context assembly to decide whether request_promo_revision is a
+        viable resolution path for a CapacityConflict.
+
+  check_coman_availability:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: manufacturing
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "co_manufacturing",
+          "quantum":       "ComanAvailabilityQuery",
+          "returns":       "ComanAvailability"
+        }
+      scont:llm_prompt_hint: >-
+        Boundary-crossing query flow. Supply_planning asks co_manufacturing whether
+        a qualified external line has capacity in the requested window, and at what
+        premium. Target role is_boundary: true. `returns: ComanAvailability`. Used
+        during Mode 2 context assembly to decide whether shift_to_coman is a viable
+        resolution path for a CapacityConflict. A positive ComanAvailability (is_qualified
+        AND has_capacity) unlocks shift_to_coman as an execution option.
 
 # ============================================================================
 # ENUMS

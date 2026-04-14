@@ -13,18 +13,17 @@ class TestDemoParity:
 
     def test_counts(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
-        # Post-Phase-D: original 4 + 7 core promo-whiplash entities (D1-D7)
-        # + 5 query request/response entities (D8) = 16
-        assert len(ontology.entities) == 16
-        # Post-Phase-C: supply_planning, production_planning, logistics_planning
-        # (internal) + customer_development, co_manufacturing (boundary)
-        assert len(ontology.roles) == 8
-        # Post-Phase-E: + promo_plan_aligned, forecast_revised, capacity_conflict_detected
-        assert len(ontology.events) == 7
-        # Post-Phase-E: + ProductionRequestLifecycle, TradePromotionLifecycle
+        # Post-Phase-F: adds DemandAnomaly as the ingress quantum for the
+        # demand_sensing boundary role → 16 + 1 = 17
+        assert len(ontology.entities) == 17
+        # Post-Phase-F: + demand_sensing boundary role
+        assert len(ontology.roles) == 9
+        # Post-Phase-F: + capacity_resolved
+        assert len(ontology.events) == 8
         assert len(ontology.state_machines) == 4
-        assert len(ontology.flows) == 3
-        # Post-Phase-D: +CommitmentStatus, +ProductionRequestStatus
+        # Post-Phase-F: original 3 + 8 handoffs (incl. re_request_production)
+        # + 3 query + 1 ingress (raise_demand_anomaly) = 15
+        assert len(ontology.flows) == 15
         assert len(ontology.enums) == 5
 
     def test_entity_names(self, demo_yaml_path):
@@ -38,6 +37,8 @@ class TestDemoParity:
             # Phase D query flow quantum + response entities
             "OTIFQuery", "PromoFlexibilityQuery", "PromoFlexibility",
             "ComanAvailabilityQuery", "ComanAvailability",
+            # Phase F ingress quantum
+            "DemandAnomaly",
         }
 
     def test_role_names(self, demo_yaml_path):
@@ -51,19 +52,39 @@ class TestDemoParity:
             "logistics_planning",
             "customer_development",
             "co_manufacturing",
+            "demand_sensing",
         }
 
     def test_boundary_roles_identified(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
         boundary_names = {r.name for r in ontology.list_boundary_roles()}
-        assert boundary_names == {"customer_development", "co_manufacturing"}
+        assert boundary_names == {
+            "customer_development",
+            "co_manufacturing",
+            "demand_sensing",
+        }
 
     def test_flow_names(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
         assert set(ontology.flows.keys()) == {
+            # Baseline procurement corridor
             "submit_procurement_request",
             "replan_on_infeasible_request",
             "submit_po_to_supplier",
+            # Phase F ingress + handoffs
+            "submit_promo_plan",
+            "raise_demand_anomaly",
+            "submit_supply_request",
+            "request_production",
+            "escalate_capacity_conflict",
+            "shift_to_coman",
+            "plan_fulfillment",
+            "request_promo_revision",
+            "re_request_production",
+            # Phase F query flows
+            "check_otif_exposure",
+            "check_promo_flexibility",
+            "check_coman_availability",
         }
 
     def test_submit_procurement_request_shape(self, demo_yaml_path):

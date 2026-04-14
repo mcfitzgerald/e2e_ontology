@@ -67,13 +67,19 @@ class TestFlowFilters:
 
 class TestQueryVsHandoff:
     def test_list_query_flows(self, loaded_demo):
-        # Demo ontology has no query flows yet — all current flows are handoffs
-        query_flows = loaded_demo.list_query_flows()
-        assert query_flows == []
+        # Post-Phase-F: three query flows all source from supply_planning during
+        # Mode 2 cross-domain context assembly
+        query_names = {f.name for f in loaded_demo.list_query_flows()}
+        assert query_names == {
+            "check_otif_exposure",
+            "check_promo_flexibility",
+            "check_coman_availability",
+        }
 
     def test_list_handoff_flows(self, loaded_demo):
         handoffs = loaded_demo.list_handoff_flows()
-        assert len(handoffs) == len(loaded_demo.flows)
+        # Total flows minus the three query flows
+        assert len(handoffs) == len(loaded_demo.flows) - 3
 
 
 class TestMisc:
@@ -96,6 +102,11 @@ class TestMisc:
         assert "rejected" in to_states
 
     def test_list_boundary_roles(self, loaded_demo):
-        # Post-Phase-C: customer_development and co_manufacturing are boundary roles
+        # Post-Phase-F: demand_sensing joins as the ingress boundary role
+        # symmetric to customer_development
         boundary_names = {r.name for r in loaded_demo.list_boundary_roles()}
-        assert boundary_names == {"customer_development", "co_manufacturing"}
+        assert boundary_names == {
+            "customer_development",
+            "co_manufacturing",
+            "demand_sensing",
+        }
