@@ -161,9 +161,30 @@ python exploder.py inspect request_production
 # Ad-hoc query
 python exploder.py query source_role=supply_planning
 
+# Structural diff between two ontology YAMLs (paths only; git-ref support deferred)
+python exploder.py diff old.yaml new.yaml
+python exploder.py diff old.yaml new.yaml --only roles,flows  # filter kinds
+python exploder.py diff old.yaml new.yaml --json              # machine-readable
+
 # Regenerate scont_bodies.py after scont_meta.yaml changes
 python exploder.py regen-bodies
 ```
+
+## Reviewing changes with `exploder diff`
+
+Raw-YAML diffs hide structural intent — a resequenced flow, a renamed slot on a body, and a whitespace tweak all look similar in `git diff`. Use `exploder diff` for a typed delta that groups by element kind and reports field-level changes on bodies, axioms, and the flow's `llm_prompt_hint`.
+
+Typical workflow for reviewing a change before committing:
+
+```bash
+git stash                                                   # stash WIP
+cp supply_chain_demo.yaml /tmp/scd_before.yaml
+cp core.yaml /tmp/                                          # needed — import is relative
+git stash pop                                               # restore WIP
+python exploder.py diff /tmp/scd_before.yaml supply_chain_demo.yaml
+```
+
+Valid `--only` kinds: `entities`, `roles`, `events`, `state_machines`, `flows`, `enums`, `warnings`. The `warnings` kind surfaces gained/lost warnings across the two ontologies — reviewer-relevant since strict-mode regressions often show up there first.
 
 ## Regenerating `scont_bodies.py`
 

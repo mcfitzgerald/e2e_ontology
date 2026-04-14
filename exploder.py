@@ -307,6 +307,215 @@ class Ontology:
 
 
 # ============================================================================
+# Structural diff — compare two Ontology instances
+# ============================================================================
+
+
+DIFF_KINDS = ("entities", "roles", "events", "state_machines", "flows", "enums", "warnings")
+
+
+@dataclass(frozen=True)
+class ElementChange:
+    """A single element (by name) that exists in both ontologies but differs.
+    `changes` is a list of (field_path, before, after) tuples. Field paths use
+    dotted form (`body.source_role`, `axioms.line_capacity_not_exceeded.severity`)."""
+    name: str
+    changes: tuple[tuple[str, Any, Any], ...]
+
+
+@dataclass(frozen=True)
+class TypedDelta:
+    """Per-element-kind delta. Any or all of added/removed/changed may be empty;
+    a TypedDelta appears in `compute_delta` output only if at least one is non-empty."""
+    kind: str  # one of DIFF_KINDS
+    added: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+    changed: tuple[ElementChange, ...] = ()
+
+
+def _element_to_comparable(kind: str, elem: Any) -> Any:
+    """Normalize an element to a plain dict for comparison. Each kind has its
+    own extraction because Ontology element types are heterogeneous."""
+    if kind == "entities":
+        return {
+            "description": elem.description,
+            "attributes": elem.attributes,
+            "rules": list(elem.rules),
+            "metrics": {m.name: m.model_dump(mode="json") for m in elem.metrics},
+            "domain": elem.domain,
+            "subdomain": elem.subdomain,
+        }
+    if kind in ("roles", "events", "state_machines"):
+        return {
+            "body": elem.body.model_dump(mode="json"),
+            "domain": elem.domain,
+            "subdomain": elem.subdomain,
+        }
+    if kind == "flows":
+        return {
+            "flow_kind": elem.kind,
+            "body": elem.body.model_dump(mode="json"),
+            "axioms": {a.name: a.model_dump(mode="json") for a in elem.axioms},
+            "llm_prompt_hint": elem.llm_prompt_hint,
+            "domain": elem.domain,
+            "subdomain": elem.subdomain,
+        }
+    if kind == "enums":
+        return elem  # raw dict from YAML
+    raise ValueError(f"unknown diff kind {kind!r}")
+
+
+def _diff_values(before: Any, after: Any, path: str = "") -> list[tuple[str, Any, Any]]:
+    """Recursive leaf-level diff. Walks dicts; compares lists and scalars as
+    atomic values. Returns (dotted_path, before, after) tuples."""
+    if before == after:
+        return []
+    if isinstance(before, dict) and isinstance(after, dict):
+        out: list[tuple[str, Any, Any]] = []
+        for k in sorted(set(before) | set(after)):
+            b = before.get(k)
+            a = after.get(k)
+            if b == a:
+                continue
+            subpath = f"{path}.{k}" if path else k
+            if isinstance(b, dict) and isinstance(a, dict):
+                out.extend(_diff_values(b, a, subpath))
+            else:
+                out.append((subpath, b, a))
+        return out
+    return [(path, before, after)]
+
+
+def compute_delta(
+    old: "Ontology",
+    new: "Ontology",
+    kinds: Iterable[str] | None = None,
+) -> list[TypedDelta]:
+    """Compare two Ontology instances element-by-element. Returns one TypedDelta
+    per element kind that has any change; empty list means ontologies match on
+    the selected kinds."""
+    selected = set(kinds) if kinds is not None else set(DIFF_KINDS)
+    result: list[TypedDelta] = []
+
+    sources = {
+        "entities": (old.entities, new.entities),
+        "roles": (old.roles, new.roles),
+        "events": (old.events, new.events),
+        "state_machines": (old.state_machines, new.state_machines),
+        "flows": (old.flows, new.flows),
+        "enums": (old.enums, new.enums),
+    }
+
+    for kind, (old_map, new_map) in sources.items():
+        if kind not in selected:
+            continue
+        added = tuple(sorted(k for k in new_map if k not in old_map))
+        removed = tuple(sorted(k for k in old_map if k not in new_map))
+        changed: list[ElementChange] = []
+        for name in sorted(set(old_map) & set(new_map)):
+            before = _element_to_comparable(kind, old_map[name])
+            after = _element_to_comparable(kind, new_map[name])
+            diffs = _diff_values(before, after)
+            if diffs:
+                changed.append(ElementChange(name=name, changes=tuple(diffs)))
+        if added or removed or changed:
+            result.append(TypedDelta(kind=kind, added=added, removed=removed, changed=tuple(changed)))
+
+    if "warnings" in selected:
+        old_warns = sorted(w.format() for w in old.warnings)
+        new_warns = sorted(w.format() for w in new.warnings)
+        if old_warns != new_warns:
+            added_w = tuple(sorted(set(new_warns) - set(old_warns)))
+            removed_w = tuple(sorted(set(old_warns) - set(new_warns)))
+            if added_w or removed_w:
+                result.append(TypedDelta(kind="warnings", added=added_w, removed=removed_w))
+
+    return result
+
+
+# ============================================================================
+# Delta rendering
+# ============================================================================
+
+
+_ANSI = {
+    "reset": "\033[0m",
+    "added": "\033[32m",    # green
+    "removed": "\033[31m",  # red
+    "changed": "\033[33m",  # yellow
+    "kind": "\033[1;36m",   # bold cyan
+    "dim": "\033[2m",
+}
+
+
+def _color(code: str, text: str, use_color: bool) -> str:
+    if not use_color:
+        return text
+    return f"{_ANSI[code]}{text}{_ANSI['reset']}"
+
+
+def _fmt_value(v: Any) -> str:
+    """Compact single-line render for diff values. None → ∅."""
+    if v is None:
+        return "∅"
+    if isinstance(v, str):
+        return repr(v)
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, default=str, sort_keys=True)
+    return repr(v)
+
+
+def render_delta_human(deltas: list[TypedDelta], use_color: bool = False) -> str:
+    """Human-readable rendering. Groups by kind; within kind, added / removed /
+    changed sections. Each changed element's field diffs are indented."""
+    if not deltas:
+        return "(no differences)"
+    lines: list[str] = []
+    for d in deltas:
+        lines.append(_color("kind", f"── {d.kind} ──", use_color))
+        if d.added:
+            for n in d.added:
+                lines.append(_color("added", f"  + {n}", use_color))
+        if d.removed:
+            for n in d.removed:
+                lines.append(_color("removed", f"  - {n}", use_color))
+        for change in d.changed:
+            lines.append(_color("changed", f"  ~ {change.name}", use_color))
+            for fpath, before, after in change.changes:
+                lines.append(
+                    "      "
+                    + _color("dim", fpath, use_color)
+                    + ": "
+                    + _color("removed", _fmt_value(before), use_color)
+                    + " → "
+                    + _color("added", _fmt_value(after), use_color)
+                )
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_delta_json(deltas: list[TypedDelta]) -> str:
+    """Machine-readable rendering. Each delta becomes a JSON object with
+    kind/added/removed/changed; each change has name and a list of
+    [field_path, before, after] triples."""
+    payload = []
+    for d in deltas:
+        payload.append({
+            "kind": d.kind,
+            "added": list(d.added),
+            "removed": list(d.removed),
+            "changed": [
+                {
+                    "name": c.name,
+                    "changes": [list(t) for t in c.changes],
+                }
+                for c in d.changed
+            ],
+        })
+    return json.dumps(payload, indent=2, default=str)
+
+
+# ============================================================================
 # Parsing helpers
 # ============================================================================
 
@@ -1067,6 +1276,31 @@ def cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_diff(args: argparse.Namespace) -> int:
+    old = load_ontology(Path(args.path1))
+    new = load_ontology(Path(args.path2))
+
+    kinds: set[str] | None = None
+    if args.only:
+        kinds = {k.strip() for k in args.only.split(",") if k.strip()}
+        invalid = kinds - set(DIFF_KINDS)
+        if invalid:
+            print(
+                f"unknown kind(s) in --only: {sorted(invalid)}. "
+                f"Valid kinds: {list(DIFF_KINDS)}",
+                file=sys.stderr,
+            )
+            return 2
+
+    deltas = compute_delta(old, new, kinds=kinds)
+    if args.json:
+        print(render_delta_json(deltas))
+    else:
+        use_color = sys.stdout.isatty() and not args.no_color
+        print(render_delta_human(deltas, use_color=use_color), end="")
+    return 0
+
+
 def cmd_doc(args: argparse.Namespace) -> int:
     path = Path(args.path)
     output = Path(args.output)
@@ -1121,6 +1355,17 @@ def build_parser() -> argparse.ArgumentParser:
     qry.add_argument("--json", action="store_true")
     qry.set_defaults(func=cmd_query)
 
+    df = sub.add_parser("diff", help="Compare two ontology YAML files and emit a structural delta.")
+    df.add_argument("path1", help="Earlier / base ontology YAML path.")
+    df.add_argument("path2", help="Later / compared ontology YAML path.")
+    df.add_argument(
+        "--only",
+        help=f"Comma-separated kinds to include. Valid: {','.join(DIFF_KINDS)}.",
+    )
+    df.add_argument("--json", action="store_true", help="Machine-readable output.")
+    df.add_argument("--no-color", action="store_true", help="Disable ANSI colors in human output.")
+    df.set_defaults(func=cmd_diff)
+
     doc = sub.add_parser("doc", help="Generate gen-doc markdown + Mermaid diagrams.")
     doc.add_argument("path")
     doc.add_argument("--output", default="docs/")
@@ -1140,7 +1385,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
     if argv and not argv[0].startswith("-") and argv[0] not in {
-        "validate", "summary", "inspect", "query", "doc", "regen-bodies"
+        "validate", "summary", "inspect", "query", "doc", "regen-bodies", "diff"
     }:
         argv = ["summary", *argv]
     args = parser.parse_args(argv)

@@ -6,6 +6,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-04-13 — Phase I.1: structural diff subcommand
+
+- **Added.** `exploder diff <path1> <path2>` — typed delta between two ontology YAML files. Groups changes by element kind (`entities` / `roles` / `events` / `state_machines` / `flows` / `enums` / `warnings`) and reports field-level diffs on bodies, axioms, and flow `llm_prompt_hint`. Raw-YAML diffs don't distinguish a structural change from a resequence or a whitespace tweak; this does.
+- **Added.** `compute_delta(old, new, kinds=None)` module-level function and `TypedDelta` / `ElementChange` dataclasses as the diff API. Body comparisons use Pydantic `model_dump(mode="json")` — no per-class comparators. Field paths are dotted (`body.source_role`, `axioms.line_capacity_not_exceeded.severity`).
+- **Added.** Human rendering with ANSI color (auto-detected via `sys.stdout.isatty()`; `--no-color` to disable) and `--json` flag for machine-readable output. `--only <kinds>` filters by comma-separated element kind.
+- **Added.** `tests/test_diff.py` — 16 tests covering additions / removals / changes per element kind, `--only` filter, identical-ontology empty-delta case, and both renderers.
+- **Updated.** `CONTRIBUTING.md` — `exploder diff` command reference and a review-workflow recipe.
+- **Deferred.** Git-ref inputs (`exploder diff HEAD~1 HEAD`) and `install-diff-driver` — explicit follow-up scope, not this commit.
+
 ### 2026-04-13 — Ontology control plane hardened; promo whiplash content built (session 3)
 
 - **Added.** `scont_meta.yaml` — LinkML metaschema that formally specifies every scont annotation body shape (`RoleBody`, `FlowBody`, `AxiomBody`, `StateMachineBody`, `TransitionBody`, `EventBody`, `MetricBody`, `AxiomReferences`) and every controlled vocabulary (`Severity`, `Scope`, `HumanInvolvement`, `FlowKind`, `MetricKind`, `MetricSource`). This is the source of truth for body shapes; prose conventions in `core.yaml` cross-reference it.
