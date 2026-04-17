@@ -13,6 +13,62 @@ st.set_page_config(page_title="Supply Chain Ontology Editor", layout="wide")
 def load_current_ontology():
     return exploder.load_ontology(ONTOLOGY_YAML)
 
+def parse_sections(text: str) -> list[dict]:
+    import re
+    lines = text.splitlines()
+    sections = []
+    divider_regex = re.compile(r"^(\s*)# (===|---|=+|-+)")
+    
+    i = 0
+    while i < len(lines):
+        match = divider_regex.match(lines[i])
+        if match:
+            start_line = i
+            header_text = []
+            i += 1
+            while i < len(lines) and not divider_regex.match(lines[i]):
+                header_text.append(lines[i].strip("# \t"))
+                i += 1
+            if i < len(lines):
+                i += 1 
+            header_str = " ".join([h for h in header_text if h]).strip()
+            if not header_str:
+                header_str = "Unnamed Section"
+            if sections:
+                sections[-1]['end_line'] = start_line - 1
+            sections.append({'header': header_str, 'start_line': start_line})
+        else:
+            i += 1
+    if sections:
+        sections[-1]['end_line'] = len(lines) - 1
+    return sections
+
+def anchor_and_insert(current_content: str, fragment: str, section_index: int) -> str:
+    sections = parse_sections(current_content)
+    if not sections or section_index < 0 or section_index >= len(sections):
+        return current_content
+    sec = sections[section_index]
+    end_line = sec['end_line']
+    lines = current_content.splitlines()
+    
+    insert_at = end_line
+    while insert_at > sec['start_line'] and not lines[insert_at].strip():
+        insert_at -= 1
+    insert_at += 1
+    
+    new_lines = lines[:insert_at]
+    if new_lines and new_lines[-1].strip():
+        new_lines.append("")
+        
+    new_lines.append(fragment.rstrip())
+    new_lines.append("") 
+    
+    remainder = lines[insert_at:]
+    while remainder and not remainder[0].strip():
+        remainder.pop(0)
+    new_lines.extend(remainder)
+    return "\n".join(new_lines) + "\n"
+
 def render_mermaid(element_name: str):
     path = Path("docs") / f"{element_name}.md"
     if path.exists():
@@ -175,7 +231,76 @@ def main():
 
     with tab_writer:
         st.header("Writable Pass")
-        st.info("Phase 2 placeholder. To be implemented next.")
+        st.write("Generate a new ontology element.")
+        
+        kind = st.selectbox("Element Kind", exploder.SCAFFOLD_KINDS)
+        name = st.text_input("Name", placeholder="e.g. new_role_name")
+        domain = st.text_input("Domain (Optional)", placeholder="e.g. procurement")
+        
+        # Read the current file to parse sections for the anchor dropdown
+        try:
+            current_text = Path(ONTOLOGY_YAML).read_text()
+            sections = parse_sections(current_text)
+            section_choices = [f"{i}: {s['header']}" for i, s in enumerate(sections)]
+        except Exception as e:
+            st.error(f"Failed to read sectors: {e}")
+            sections = []
+            section_choices = []
+            
+        anchor_selection = st.selectbox("Insert after section", section_choices)
+        
+        if st.button("Preview"):
+            if not name.strip():
+                st.error("Name is required.")
+            else:
+                try:
+                    frag = exploder._template_for_kind(kind, name.strip(), {}, domain.strip() if domain.strip() else None)
+                    st.session_state["preview_fragment"] = frag
+                    st.session_state["preview_name"] = name.strip()
+                except Exception as e:
+                    st.error(f"Failed to scaffold: {e}")
+                    
+        if "preview_fragment" in st.session_state:
+            st.subheader("Preview")
+            frag = st.session_state["preview_fragment"]
+            st.code(frag, language="yaml")
+            
+            import re
+            placeholders = re.findall(r"<[A-Z_]+>", frag)
+            if placeholders:
+                st.warning(f"Please fill out these placeholders before saving: {', '.join(set(placeholders))}")
+                
+            new_frag = st.text_area("Edit Fragment", value=frag, height=300)
+            st.session_state["edited_fragment"] = new_frag
+            
+            still_has_placeholders = bool(re.search(r"<[A-Z_]+>", new_frag))
+            
+            if st.button("Insert & Save", disabled=still_has_placeholders):
+                # Atomic writes logic
+                if not sections:
+                    st.error("No sections could be parsed, aborting.")
+                else:
+                    anchor_idx = int(anchor_selection.split(":")[0])
+                    new_content = anchor_and_insert(current_text, new_frag, anchor_idx)
+                    
+                    tmp_file = Path(f"{ONTOLOGY_YAML}.tmp")
+                    tmp_file.write_text(new_content)
+                    
+                    import subprocess
+                    # Run validation against the .tmp file
+                    cmd = [sys.executable, "exploder.py", "validate", "--strict", str(tmp_file)]
+                    res = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if res.returncode == 0:
+                        import os
+                        os.replace(tmp_file, ONTOLOGY_YAML)
+                        st.success("Successfully inserted and validated!")
+                        st.session_state.pop("preview_fragment")
+                        # Clear load_current_ontology cache
+                        load_current_ontology.clear()
+                    else:
+                        st.error("Validation failed! Changes were rolled back.")
+                        st.code(res.stderr or res.stdout)
 
 if __name__ == "__main__":
     main()
