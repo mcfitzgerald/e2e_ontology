@@ -6,6 +6,14 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-04-17 — Phase I.1 follow-up: git-ref inputs for diff
+
+- **Added.** `exploder diff` now accepts git refs — `HEAD~1`, `main`, SHAs, and `<ref>:<path>` — as either or both arguments. Replaces the old `/tmp`-copy-and-stash recipe for diffing the working tree against an earlier commit. Refs are materialized via `git archive | tar -x` into a tempdir so LinkML imports (e.g. `core.yaml`) resolve relative to the materialized file.
+- **Added.** `--file <path>` flag — names the file within a bare ref when neither arg is a disk path. When exactly one arg is a disk path, the other (ref) borrows its basename automatically, so `exploder diff HEAD supply_chain_demo.yaml` works without `--file`.
+- **Added.** `tests/test_diff_gitref.py` — 10 tests covering bare-ref + `--file`, `<ref>:<path>` form, mixed ref/path (both orderings), bad-ref error path, resolver idempotence on identical refs, and a regression test that plain two-disk-path mode still works.
+- **Updated.** `CONTRIBUTING.md` — replaced the `/tmp scd_before.yaml` recipe with the direct ref-based workflow.
+- **Deferred.** `exploder install-diff-driver` (wires the structural diff into `git diff` via `.gitattributes` + `.gitconfig`) — still queued as explicit follow-up scope.
+
 ### 2026-04-17 — Phase I.2: scaffolding subcommand
 
 - **Added.** `exploder new <kind> --name <name>` — print a ready-to-paste YAML fragment for a new ontology element to stdout. Kinds: `role`, `event`, `flow`, `query-flow`, `state-machine`, `axiom`, `entity`. Removes the lookup friction of consulting `scont_meta.yaml` for required field shapes and hand-rolling the folded-JSON annotation.

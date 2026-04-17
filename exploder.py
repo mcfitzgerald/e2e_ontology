@@ -22,12 +22,15 @@ See initial_design_draft.md §6.5 and the plan file for design rationale.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 import yaml
 from linkml_runtime.utils.schemaview import SchemaView
@@ -1276,10 +1279,99 @@ def cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_diff(args: argparse.Namespace) -> int:
-    old = load_ontology(Path(args.path1))
-    new = load_ontology(Path(args.path2))
+class DiffInputError(ValueError):
+    """Raised when a diff argument can't be resolved to a file or git ref."""
 
+
+def _is_existing_path(arg: str) -> bool:
+    # Anything with a path separator or an existing filesystem entry is a path,
+    # not a git ref. Plain names like 'HEAD' or a bare branch never pass this.
+    if "/" in arg or "\\" in arg:
+        return True
+    return Path(arg).exists()
+
+
+def _git_archive_to(ref: str, dest: Path) -> None:
+    """Extract the repo's tracked contents at `ref` into `dest` via
+    `git archive | tar -x`. Raises DiffInputError if the ref doesn't resolve."""
+    try:
+        archive = subprocess.run(
+            ["git", "archive", "--format=tar", ref],
+            capture_output=True,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise DiffInputError("git not found on PATH") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace").strip()
+        raise DiffInputError(f"could not resolve git ref {ref!r}: {stderr}") from exc
+    try:
+        subprocess.run(
+            ["tar", "-x", "-C", str(dest)],
+            input=archive.stdout,
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace").strip()
+        raise DiffInputError(f"tar extraction failed for ref {ref!r}: {stderr}") from exc
+
+
+@contextlib.contextmanager
+def _resolve_diff_inputs(
+    arg1: str, arg2: str, file_override: str | None
+) -> Iterator[tuple[Path, Path]]:
+    """Map a pair of CLI args (each either a disk path or a git ref, optionally
+    `<ref>:<file>`) to a pair of filesystem paths pointing at loadable ontology
+    YAML. Materializes git refs via `git archive` into tempdirs so that LinkML
+    imports resolve. Cleans up tempdirs on exit.
+
+    Filename inference for a bare ref: use `--file` if given, else borrow the
+    basename of the other arg when it's a disk path. Raises DiffInputError if
+    neither is available."""
+    tempdirs: list[Path] = []
+
+    def _resolve(primary: str, fallback_name: str | None) -> Path:
+        if ":" not in primary and _is_existing_path(primary):
+            return Path(primary)
+        if ":" in primary:
+            ref, _, file = primary.partition(":")
+        else:
+            ref = primary
+            file = file_override or fallback_name
+        if not file:
+            raise DiffInputError(
+                f"{primary!r} is a bare git ref — pass --file <path> or use "
+                f"'{primary}:<path>' to name the file within the ref"
+            )
+        tmp = Path(tempfile.mkdtemp(prefix="exploder-diff-"))
+        tempdirs.append(tmp)
+        _git_archive_to(ref, tmp)
+        resolved = tmp / file
+        if not resolved.exists():
+            raise DiffInputError(
+                f"{file!r} does not exist at ref {ref!r} (looked in {tmp})"
+            )
+        return resolved
+
+    # First pass: if exactly one arg is a disk path, use its basename as the
+    # default for the other arg. Lets `exploder diff HEAD~1 path/to/file.yaml`
+    # work without --file.
+    path1_is_disk = ":" not in arg1 and _is_existing_path(arg1)
+    path2_is_disk = ":" not in arg2 and _is_existing_path(arg2)
+    fallback1 = Path(arg2).name if path2_is_disk and not path1_is_disk else None
+    fallback2 = Path(arg1).name if path1_is_disk and not path2_is_disk else None
+
+    try:
+        p1 = _resolve(arg1, fallback1)
+        p2 = _resolve(arg2, fallback2)
+        yield p1, p2
+    finally:
+        for t in tempdirs:
+            shutil.rmtree(t, ignore_errors=True)
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
     kinds: set[str] | None = None
     if args.only:
         kinds = {k.strip() for k in args.only.split(",") if k.strip()}
@@ -1292,7 +1384,15 @@ def cmd_diff(args: argparse.Namespace) -> int:
             )
             return 2
 
-    deltas = compute_delta(old, new, kinds=kinds)
+    try:
+        with _resolve_diff_inputs(args.path1, args.path2, args.file) as (p1, p2):
+            old = load_ontology(p1)
+            new = load_ontology(p2)
+            deltas = compute_delta(old, new, kinds=kinds)
+    except DiffInputError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
     if args.json:
         print(render_delta_json(deltas))
     else:
@@ -1647,9 +1747,20 @@ def build_parser() -> argparse.ArgumentParser:
     qry.add_argument("--json", action="store_true")
     qry.set_defaults(func=cmd_query)
 
-    df = sub.add_parser("diff", help="Compare two ontology YAML files and emit a structural delta.")
-    df.add_argument("path1", help="Earlier / base ontology YAML path.")
-    df.add_argument("path2", help="Later / compared ontology YAML path.")
+    df = sub.add_parser("diff", help="Compare two ontology YAMLs (files or git refs) and emit a structural delta.")
+    df.add_argument(
+        "path1",
+        help="Earlier / base side. Either a disk path, a git ref (HEAD~1, main, SHA), or <ref>:<path>.",
+    )
+    df.add_argument(
+        "path2",
+        help="Later / compared side. Same accepted forms as path1.",
+    )
+    df.add_argument(
+        "--file",
+        help="File path within a git ref when the ref form is bare (e.g. --file supply_chain_demo.yaml). "
+             "Ignored for disk-path args. Defaults to the other arg's basename if that arg is a disk path.",
+    )
     df.add_argument(
         "--only",
         help=f"Comma-separated kinds to include. Valid: {','.join(DIFF_KINDS)}.",
