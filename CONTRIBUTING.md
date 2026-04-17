@@ -166,6 +166,15 @@ python exploder.py diff old.yaml new.yaml
 python exploder.py diff old.yaml new.yaml --only roles,flows  # filter kinds
 python exploder.py diff old.yaml new.yaml --json              # machine-readable
 
+# Scaffold a YAML fragment for a new element (stdout only; paste into the demo)
+python exploder.py new role --name supply_planning --domain supply_netops \
+    --description "Plans supply" --llm-prompt-hint "..."
+python exploder.py new flow --name request_production --domain supply_netops \
+    --source-role supply_planning --target-role production_planning \
+    --quantum ProductionRequest --trigger-event production_assigned \
+    --llm-prompt-hint "..."
+python exploder.py new role --name supply_planning --interactive  # prompt for required fields
+
 # Regenerate scont_bodies.py after scont_meta.yaml changes
 python exploder.py regen-bodies
 ```
@@ -185,6 +194,18 @@ python exploder.py diff /tmp/scd_before.yaml supply_chain_demo.yaml
 ```
 
 Valid `--only` kinds: `entities`, `roles`, `events`, `state_machines`, `flows`, `enums`, `warnings`. The `warnings` kind surfaces gained/lost warnings across the two ontologies — reviewer-relevant since strict-mode regressions often show up there first.
+
+## Scaffolding new elements with `exploder new`
+
+`exploder new <kind> --name <name> [--domain ...] [--<field> <value>]...` prints a ready-to-paste YAML fragment to stdout. The command never edits `supply_chain_demo.yaml` — the file has opinionated section comments and ordering; authors paste into the right section.
+
+Valid kinds: `role`, `event`, `flow`, `query-flow`, `state-machine`, `axiom`, `entity`. `query-flow` is `flow` with a required `returns:` field. `axiom` emits a list entry meant to be inserted into a flow's `scont:axioms` annotation, not a standalone class. `entity` is plain LinkML (no `instantiates:`).
+
+Body fields are passed as `--kebab-case-field VALUE`: e.g. `--source-role supply_planning`, `--trigger-event production_assigned`, `--llm-prompt-hint "..."`. Any missing required field renders as a `<UPPERCASE_PLACEHOLDER>` string — search-and-replace before pasting, or re-run with `--interactive` to get a prompt loop for the required set.
+
+The fragment also carries a YAML comment block listing the available optional body fields (with types or enum values), so authors can add them into the JSON as needed without a round trip to `scont_meta.yaml`.
+
+Scaffolding output is structural, not cross-ref validated. After pasting, run `exploder validate --strict`.
 
 ## Regenerating `scont_bodies.py`
 

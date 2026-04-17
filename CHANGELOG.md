@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-04-17 — Phase I.2: scaffolding subcommand
+
+- **Added.** `exploder new <kind> --name <name>` — print a ready-to-paste YAML fragment for a new ontology element to stdout. Kinds: `role`, `event`, `flow`, `query-flow`, `state-machine`, `axiom`, `entity`. Removes the lookup friction of consulting `scont_meta.yaml` for required field shapes and hand-rolling the folded-JSON annotation.
+- **Added.** CLI-args-first input — `--source-role X --target-role Y --quantum Z --trigger-event E ...`. Unknown `--kebab-field VALUE` flags are routed to body fields via argparse `parse_known_args`. Missing required fields render as `<UPPERCASE_PLACEHOLDER>` strings. Optional fields surface as a YAML comment block (with types or enum values) above the body annotation so authors know what's available without a trip to the metaschema.
+- **Added.** `--interactive` flag — prompt stdin for each required body field not supplied via flags. Produces output equivalent to the CLI-args form.
+- **Added.** Stdout-only contract — never auto-edits `supply_chain_demo.yaml`. The demo has opinionated section comments and ordering; authors paste into the right section.
+- **Added.** `tests/test_scaffolding.py` — 39 tests covering: per-kind rendering (`role`/`event`/`flow`/`query-flow`/`state-machine`/`axiom`/`entity`), required-field placeholders, optional-field commentary (including suppression when the caller has supplied the field), CLI entry-point routing via `main()`, `--interactive` parity with CLI flags, and round-trip parsing of every generated fragment through `load_ontology` (axiom fragment tested by pasting into a synthetic flow's `scont:axioms` list).
+- **Updated.** `CONTRIBUTING.md` — `exploder new` usage and semantics section.
+- **Deferred.** Streamlit editor (Phase I.3) — now has the authoring primitives it needs to shell out to.
+
 ### 2026-04-13 — Phase I.1: structural diff subcommand
 
 - **Added.** `exploder diff <path1> <path2>` — typed delta between two ontology YAML files. Groups changes by element kind (`entities` / `roles` / `events` / `state_machines` / `flows` / `enums` / `warnings`) and reports field-level diffs on bodies, axioms, and flow `llm_prompt_hint`. Raw-YAML diffs don't distinguish a structural change from a resequence or a whitespace tweak; this does.

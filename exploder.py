@@ -1301,6 +1301,298 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+# ============================================================================
+# Scaffolding — emit YAML fragments for new elements
+# ============================================================================
+
+
+SCAFFOLD_KINDS = ("role", "event", "flow", "query-flow", "state-machine", "axiom", "entity")
+
+_TAG_BY_KIND = {
+    "role": "scont:Role",
+    "event": "scont:Event",
+    "flow": "scont:InformationFlow",
+    "query-flow": "scont:InformationFlow",
+    "state-machine": "scont:StateMachine",
+}
+
+_BODY_ANNOTATION_BY_KIND: dict[str, tuple[str, type[pydantic.BaseModel]]] = {
+    "role": (ANN_ROLE, RoleBody),
+    "event": (ANN_EVENT, EventBody),
+    "flow": (ANN_FLOW, FlowBody),
+    "query-flow": (ANN_FLOW, FlowBody),
+    "state-machine": (ANN_STATE_MACHINE, StateMachineBody),
+}
+
+# State-machine body needs structured placeholders (list[str] and
+# list[TransitionBody]) that `<STATES>` can't satisfy. Use these when the user
+# doesn't supply values.
+_STATE_MACHINE_DEFAULTS: dict[str, Any] = {
+    "states": ["<STATE_1>", "<STATE_2>"],
+    "transitions": [
+        {"from_state": "<STATE_1>", "to_state": "<STATE_2>", "trigger": "<TRIGGER>"}
+    ],
+    "initial": "<STATE_1>",
+}
+
+
+class ScaffoldError(ValueError):
+    """Raised when scaffolding inputs are malformed."""
+
+
+def _unwrap_type(annotation: Any) -> Any:
+    import typing
+    origin = getattr(annotation, "__origin__", None)
+    if origin is typing.Union:
+        non_none = [a for a in annotation.__args__ if a is not type(None)]
+        if non_none:
+            return _unwrap_type(non_none[0])
+    return annotation
+
+
+def _field_descriptor(cls: type[pydantic.BaseModel], name: str) -> str:
+    """Short human-readable type description for the optional-fields comment."""
+    import enum
+    info = cls.model_fields[name]
+    annotation = _unwrap_type(info.annotation)
+    if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
+        return " | ".join(repr(v.value) for v in annotation)
+    origin = getattr(annotation, "__origin__", None)
+    if origin is list:
+        inner = _unwrap_type(annotation.__args__[0]) if annotation.__args__ else str
+        if isinstance(inner, type) and issubclass(inner, enum.Enum):
+            return "list[" + " | ".join(repr(v.value) for v in inner) + "]"
+        inner_name = getattr(inner, "__name__", "any")
+        return f"list[{inner_name}]"
+    if isinstance(annotation, type):
+        return annotation.__name__
+    return repr(annotation)
+
+
+def _required_field_names(cls: type[pydantic.BaseModel]) -> list[str]:
+    return [n for n, info in cls.model_fields.items() if info.is_required()]
+
+
+def _optional_field_names(cls: type[pydantic.BaseModel]) -> list[str]:
+    return [n for n, info in cls.model_fields.items() if not info.is_required()]
+
+
+def _body_class_for_kind(kind: str) -> type[pydantic.BaseModel] | None:
+    """Return the Pydantic body class for a kind, or None if the kind has no
+    annotation body (entity is plain LinkML; axiom is a list entry, not a class)."""
+    entry = _BODY_ANNOTATION_BY_KIND.get(kind)
+    if entry:
+        return entry[1]
+    if kind == "axiom":
+        return AxiomBody
+    return None
+
+
+def _coerce_value(cls: type[pydantic.BaseModel], field_name: str, raw: Any) -> Any:
+    """Normalize a CLI-string value for JSON emission. Strings pass through;
+    list[str] fields split on commas; bool fields parse true/false."""
+    if field_name not in cls.model_fields:
+        return raw
+    annotation = _unwrap_type(cls.model_fields[field_name].annotation)
+    if isinstance(raw, str):
+        if annotation is bool:
+            return raw.strip().lower() in ("1", "true", "yes", "y")
+        origin = getattr(annotation, "__origin__", None)
+        if origin is list:
+            return [s.strip() for s in raw.split(",") if s.strip()]
+    return raw
+
+
+def _indent(text: str, prefix: str) -> str:
+    return "\n".join(prefix + line if line else line for line in text.splitlines())
+
+
+def _build_body_dict(
+    cls: type[pydantic.BaseModel],
+    values: dict[str, Any],
+    required: list[str],
+    defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Construct the body dict in declaration order: required first (filled or
+    placeholder), then any optional fields the caller has explicitly supplied."""
+    body: dict[str, Any] = {}
+    for f in required:
+        if f in values:
+            body[f] = _coerce_value(cls, f, values[f])
+        elif defaults and f in defaults:
+            body[f] = defaults[f]
+        else:
+            body[f] = f"<{f.upper()}>"
+    for f, v in values.items():
+        if f in cls.model_fields and f not in body:
+            body[f] = _coerce_value(cls, f, v)
+    return body
+
+
+def _optional_comment_lines(
+    cls: type[pydantic.BaseModel], exclude: set[str], indent: str
+) -> list[str]:
+    optionals = [n for n in _optional_field_names(cls) if n not in exclude]
+    if not optionals:
+        return []
+    lines = [f"{indent}# Optional body fields (add inside the JSON below as needed):"]
+    for n in optionals:
+        lines.append(f"{indent}#   {n}: {_field_descriptor(cls, n)}")
+    return lines
+
+
+def _render_class_fragment(
+    kind: str, name: str, values: dict[str, Any], domain: str | None
+) -> str:
+    tag = _TAG_BY_KIND[kind]
+    ann_name, cls = _BODY_ANNOTATION_BY_KIND[kind]
+    required = list(_required_field_names(cls))
+    if kind == "query-flow" and "returns" not in required:
+        required.append("returns")
+
+    defaults = _STATE_MACHINE_DEFAULTS if kind == "state-machine" else None
+    body = _build_body_dict(cls, values, required, defaults=defaults)
+
+    lines = [f"  {name}:", f"    instantiates: [{tag}]", "    annotations:"]
+    lines.append(f"      scont:domain: {domain or '<DOMAIN>'}")
+    lines.extend(_optional_comment_lines(cls, set(body.keys()), "      "))
+    lines.append(f"      {ann_name}: >-")
+    lines.append(_indent(json.dumps(body, indent=2), "        "))
+
+    # Flows carry llm_prompt_hint as a sibling annotation (not in FlowBody).
+    if kind in ("flow", "query-flow"):
+        hint = values.get("llm_prompt_hint", "<LLM_PROMPT_HINT>")
+        lines.append(f"      scont:llm_prompt_hint: {json.dumps(hint)}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_entity_fragment(name: str, values: dict[str, Any], domain: str | None) -> str:
+    description = values.get("description", "<DESCRIPTION>")
+    lines = [
+        f"  {name}:",
+        f"    description: {json.dumps(description)}",
+        "    annotations:",
+        f"      scont:domain: {domain or '<DOMAIN>'}",
+        "    attributes:",
+        "      # Replace with real attributes. Range can be a primitive",
+        "      # (string|integer|decimal|boolean|date) or another declared class/enum.",
+        "      <attr_name>:",
+        "        range: string",
+        "        required: true",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _render_axiom_fragment(values: dict[str, Any]) -> str:
+    required = list(_required_field_names(AxiomBody))
+    body = _build_body_dict(AxiomBody, values, required)
+    json_text = json.dumps(body, indent=2)
+    optional_lines = [
+        f"#   {n}: {_field_descriptor(AxiomBody, n)}"
+        for n in _optional_field_names(AxiomBody)
+        if n not in body
+    ]
+    out = [
+        "# Axiom list-entry. Paste into a flow's scont:axioms annotation:",
+        "#   scont:axioms: >-",
+        "#     [ <entry>, <entry>, ... ]",
+        json_text,
+    ]
+    if optional_lines:
+        out.append("# Optional axiom fields:")
+        out.extend(optional_lines)
+    return "\n".join(out) + "\n"
+
+
+def _template_for_kind(
+    kind: str, name: str, values: dict[str, Any], domain: str | None
+) -> str:
+    if kind not in SCAFFOLD_KINDS:
+        raise ScaffoldError(f"unknown kind: {kind!r}. Valid: {list(SCAFFOLD_KINDS)}")
+    if kind == "entity":
+        return _render_entity_fragment(name, values, domain)
+    if kind == "axiom":
+        return _render_axiom_fragment(values)
+    return _render_class_fragment(kind, name, values, domain)
+
+
+def _parse_extra_flags(tokens: list[str]) -> dict[str, str]:
+    """Parse leftover `--kebab-field VALUE` / `--kebab-field=VALUE` tokens into
+    a snake_case dict. Unknown tokens to `new` are treated as dynamic body
+    fields; argparse's parse_known_args routes them here."""
+    out: dict[str, str] = {}
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if not tok.startswith("--"):
+            raise ScaffoldError(f"unexpected argument: {tok!r}")
+        key_part = tok[2:]
+        if "=" in key_part:
+            key, _, val = key_part.partition("=")
+            out[key.replace("-", "_")] = val
+            i += 1
+            continue
+        if i + 1 >= len(tokens) or tokens[i + 1].startswith("--"):
+            raise ScaffoldError(f"missing value for --{key_part}")
+        out[key_part.replace("-", "_")] = tokens[i + 1]
+        i += 2
+    return out
+
+
+def _interactive_prompt(kind: str, current: dict[str, Any]) -> dict[str, Any]:
+    """Prompt stdin for each required body field not already supplied."""
+    cls = _body_class_for_kind(kind)
+    if cls is None:
+        return current
+    required = list(_required_field_names(cls))
+    if kind == "query-flow" and "returns" not in required:
+        required.append("returns")
+    # Flow's llm_prompt_hint is a sibling annotation; still prompt for it
+    # because strict validation warns when missing.
+    if kind in ("flow", "query-flow") and "llm_prompt_hint" not in required:
+        required.append("llm_prompt_hint")
+    out = dict(current)
+    for f in required:
+        if f in out:
+            continue
+        if f in cls.model_fields:
+            desc = _field_descriptor(cls, f)
+        else:
+            desc = "string"
+        resp = input(f"{f} [{desc}]: ").strip()
+        if resp:
+            out[f] = resp
+    return out
+
+
+def cmd_new(args: argparse.Namespace) -> int:
+    kind = args.kind
+    try:
+        extra = _parse_extra_flags(list(getattr(args, "_unknown", []) or []))
+    except ScaffoldError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    if getattr(args, "llm_prompt_hint", None) is not None:
+        extra.setdefault("llm_prompt_hint", args.llm_prompt_hint)
+    if kind == "axiom" and args.name:
+        extra.setdefault("name", args.name)
+
+    if args.interactive:
+        try:
+            extra = _interactive_prompt(kind, extra)
+        except EOFError:
+            pass
+
+    try:
+        fragment = _template_for_kind(kind, args.name, extra, args.domain)
+    except ScaffoldError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(fragment, end="")
+    return 0
+
+
 def cmd_doc(args: argparse.Namespace) -> int:
     path = Path(args.path)
     output = Path(args.output)
@@ -1366,6 +1658,21 @@ def build_parser() -> argparse.ArgumentParser:
     df.add_argument("--no-color", action="store_true", help="Disable ANSI colors in human output.")
     df.set_defaults(func=cmd_diff)
 
+    new = sub.add_parser(
+        "new",
+        help="Scaffold a YAML fragment for a new ontology element (stdout only).",
+    )
+    new.add_argument("kind", choices=SCAFFOLD_KINDS, help="Element kind to scaffold.")
+    new.add_argument("--name", required=True, help="Element name (axiom: name field within the body).")
+    new.add_argument("--domain", help="scont:domain annotation value.")
+    new.add_argument("--llm-prompt-hint", dest="llm_prompt_hint", help="llm_prompt_hint value.")
+    new.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt stdin for each required body field not supplied via flags.",
+    )
+    new.set_defaults(func=cmd_new)
+
     doc = sub.add_parser("doc", help="Generate gen-doc markdown + Mermaid diagrams.")
     doc.add_argument("path")
     doc.add_argument("--output", default="docs/")
@@ -1385,10 +1692,15 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
     if argv and not argv[0].startswith("-") and argv[0] not in {
-        "validate", "summary", "inspect", "query", "doc", "regen-bodies", "diff"
+        "validate", "summary", "inspect", "query", "doc", "regen-bodies", "diff", "new"
     }:
         argv = ["summary", *argv]
-    args = parser.parse_args(argv)
+    # `new` accepts dynamic --<field> VALUE pairs for body fields; route them
+    # through parse_known_args. Every other subcommand rejects extras.
+    args, unknown = parser.parse_known_args(argv)
+    if unknown and getattr(args, "cmd", None) != "new":
+        parser.error(f"unrecognized arguments: {' '.join(unknown)}")
+    args._unknown = unknown
     if not getattr(args, "func", None):
         parser.print_help()
         return 1
