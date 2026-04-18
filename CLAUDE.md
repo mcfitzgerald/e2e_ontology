@@ -108,6 +108,11 @@ The user is a supply chain technologist. Expects honest pushback and debate, not
 - **HITL belongs in the orchestrator, not the ontology.** Ontology declares what *may* need humans + context to surface the need; orchestrator owns thresholds and mechanisms. Don't let ontology fields specify runtime policy.
 - **`llm_prompt_hint` governance is a future concern.** Watch for it becoming a generic catch-all bucket; don't try to formalize it during the POC.
 
+## Tooling conventions
+
+- **Frontend work uses the `frontend-design` skill.** Any time the task involves building or modifying web UI — components, pages, styling, layout, interaction — invoke the `frontend-design` skill rather than writing raw frontend code from scratch. It produces distinctive, production-grade output and avoids generic AI-styled frontends.
+- **Library/API/CLI docs come from `context7`.** Whenever you need reference material for a library, framework, SDK, API, or CLI tool (React, Vite, React Flow, FastAPI, LinkML, `uv`, etc.) — even ones you think you know — query `context7` before answering or coding. Your training data may be stale. Prefer it over web search for docs.
+
 ## Gotchas
 
 - **Warnings count in `--strict` mode.** "Only a warning" is not a get-out — if your change adds an orphan event or unused role, strict will fail and the consumer handoff is blocked.
