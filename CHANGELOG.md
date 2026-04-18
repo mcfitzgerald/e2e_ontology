@@ -6,6 +6,45 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-04-18 — Phase I.3 Editor, Phase 2: context panel + relational navigation
+
+- **Added.** Right-rail **ContextPanel** (360px, always mounted, collapsible to a 26px vertical strip) backed by a **Selection history stack** in the Zustand store. `navigate()` pushes, `back()` pops, `jumpTo(depth)` truncates. Clicking any chip pushes the breadcrumb.
+- **Added.** Six kind-specific panels: `RolePanel` (domain, boundary, HITL, description, outgoing/incoming flows, observed events, llm_prompt_hint), `FlowPanel` (source/target/kind/quantum/trigger/lifecycle/returns + axiom list with severity dots + route-on-fail), `EventPanel` (observed_by, description, triggered flows), `FSMPanel` (initial, terminal, states, full transitions table, flows sharing), `AxiomPanel` (nl as hint block, scope/severity, owning flow, route-on-fail, expr, violation message), `EntityPanel` (slots, carried-by flows, returned-by flows).
+- **Added.** Shared `Chip` component with kind-tinted backgrounds, dashed border for boundary role chips, keyboard-accessible (Enter/Space). Relational helpers (`outgoingFlows`, `flowsTriggeredBy`, `flowOwningAxiom`, …) in one file so every panel queries the payload uniformly.
+- **Added.** `Breadcrumb` — home button + kind-glyph + name chain; intermediate entries are jump-to-depth buttons.
+- **Added.** `useLocalToggle` hook — boolean state persisted to localStorage, cross-tab synced via `storage` event. Powers both collapsibles.
+- **Added.** Legend collapse to a small `ⓘ legend` pill.
+- **Added.** `editor/parity_reviews/02_context_panel.md` — Phase 2 parity memo.
+- **Deferred.** Diff gutters / ambient change indicators (Phase 3). Filter controls + search (Phase 2.5-ish, still TBD). Slot navigation from EntityPanel. Screens 2/3/4.
+
+### 2026-04-18 — Phase I.3 Editor, Phase 1: swimlane graph (Screen 1 variant A)
+
+- **Added.** `editor/backend/` — FastAPI service wrapping `exploder.load_ontology()`. `GET /api/ontology` returns a lean flat JSON (roles / events / flows / state_machines / entities / axioms / warnings / summary counts) suitable for the frontend; `GET /api/health` reports the configured YAML path + existence. Mtime-keyed cache (`cache.py`) so repeated hits don't re-parse.
+- **Added.** `editor/frontend/src/screens/Structure/` — role swimlane graph rendered as a single SVG. `layout.ts` runs dagre (`rankdir=LR`) for X ordering, then forces each role's Y to its domain swimlane and redistributes X within each lane to guarantee minimum spacing (fixes the overlap where two same-domain roles would stack after the Y-snap). `edgeGeometry.ts` bundles parallel flows between the same role pair with a perpendicular offset so they don't overlay.
+- **Added.** Custom SVG `RoleNode`s (170×36 cards, dashed for `is_boundary`, HITL badge for `human_involvement`, diff gutter left-edge placeholder for Phase 3). Custom edges with kind-specific strokes (material earth thick, information blue dashed, cash gold doubled). Axiom `!` dots at edge midpoints colored by severity (blocking / warning / advisory).
+- **Added.** Reorderable swimlanes — `↑`/`↓` buttons at each lane's left edge; order persisted to localStorage (`editor.swimlaneOrder`).
+- **Added.** `Legend` overlay bottom-left with flow-kind + boundary + HITL + axiom glyphs. API client (`api/client.ts`) and Zustand store (`store/ontology.ts`) + `OntologyPayload` TypeScript types mirroring `serialize.py`.
+- **Added.** `editor/parity_reviews/01_structure_variant_a.md` — Phase 1 parity memo.
+- **Changed.** Dropped the mockup's handwritten font accents (Caveat, Shadows Into Light). User feedback: "that was just for mockup, we need professional looking font". Imports stripped from `typography.css`; JetBrains Mono everywhere. `editor/AGENTS.md` records the rule for future agents.
+- **Architectural note.** Phase 1 renders as raw SVG rather than wrapping React Flow (which the plan named) — the mockup's cohesive swimlane + sketchy filter + inline badges fragment awkwardly across React Flow's HTML-node + SVG-edge split. `@xyflow/react` stays installed for later phases that need dragging or richer interactivity.
+
+### 2026-04-18 — Phase I.3 Editor, Phase 0: scaffolding
+
+- **Added.** `editor/` tree under the repo root — `design_reference/` (Claude Design mockup verbatim + chat transcript + banner README marking it reference-only), `parity_reviews/` (per-screen sign-off memos), `frontend/` (Vite + React 18 + TypeScript strict with `@xyflow/react`, `@dagrejs/dagre`, `zustand` installed), `backend/` (FastAPI stub serving `/api/health`).
+- **Added.** `editor/AGENTS.md` — editor-local directives for coding agents (the mockup is the spec, parity gate is mandatory per screen, stack conventions, scope guardrails). Scopes the rules to this subtree without bloating root `CLAUDE.md`.
+- **Added.** Design tokens extracted verbatim from the mockup into `editor/frontend/src/tokens/` — `colors.css` (paper/ink + domain tints + flow-kind + axiom severity + diff states), `typography.css` (JetBrains Mono import + variables), `reset.css` (paper-grain background), `SketchyFilters.tsx` (SVG `feTurbulence` + `feDisplacementMap` roughen filters + kind-colored arrow markers), `flowStyles.ts` (stroke spec per flow kind).
+- **Added.** `editor/README.md` — local-run instructions for the two-terminal workflow.
+
+### 2026-04-18 — CLAUDE.md: tooling conventions
+
+- **Added.** `## Tooling conventions` section in root `CLAUDE.md`. Codifies two rules: (1) frontend work invokes the `frontend-design` skill rather than writing UI code from scratch; (2) library / API / CLI docs go through `context7` rather than web search or model memory. Prevents the recurring failure mode where frontend tasks produce generic AI-styled UI or use stale API assumptions.
+
+### 2026-04-17 — Phase I.3 Editor prototype (rolled back)
+
+- **Added.** Streamlit-based editor (`editor.py` + `tests/test_editor.py`) produced in an Antigravity session — a three-tab UI (Viewer / Diff / WritableEditor) with `st.json` panels, broken inline Mermaid, and form-based authoring.
+- **Rejected + removed** (commit `8276f96`). The design failed the task: three separate tabs forced context-switching, `st.json` isn't authoring-grade, Mermaid didn't render via `st.markdown`, form-first authoring fought the graph-first intent of the brief. User: "clunky af and not what i had in mind". Kept `reference/ontology_editor_design_brief.md` (untracked) so the next pass would start from intent, not the Streamlit dead-end.
+- **Lesson encoded forward.** The replacement (Phase 0+1+2 above) is graph-first, single-surface, and validated against a visual-parity gate per screen.
+
 ### 2026-04-17 — Phase I.1 follow-up: git-ref inputs for diff
 
 - **Added.** `exploder diff` now accepts git refs — `HEAD~1`, `main`, SHAs, and `<ref>:<path>` — as either or both arguments. Replaces the old `/tmp`-copy-and-stash recipe for diffing the working tree against an earlier commit. Refs are materialized via `git archive | tar -x` into a tempdir so LinkML imports (e.g. `core.yaml`) resolve relative to the materialized file.
