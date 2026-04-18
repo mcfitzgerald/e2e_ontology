@@ -1,0 +1,36 @@
+/*
+ * Body reset + paper-grain texture. Extracted from mockup's html/body rules.
+ * The repeating-linear-gradient is the subtle horizontal rule pattern that
+ * makes the surface read as notebook paper.
+ */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(154, 132, 94, 0.04) 0, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(154, 132, 94, 0.035) 0, transparent 50%),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 23px,
+      rgba(154, 132, 94, 0.04) 23px,
+      rgba(154, 132, 94, 0.04) 24px
+    );
+}
+
+.sketchy {
+  filter: url(#roughen);
+}
+
+.sketchy-soft {
+  filter: url(#roughen-soft);
+}

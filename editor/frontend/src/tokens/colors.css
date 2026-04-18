@@ -1,0 +1,37 @@
+/*
+ * Color tokens — extracted verbatim from editor/design_reference/wireframe.html
+ * (:root block). Do not reinvent; update from mockup if palette changes.
+ */
+
+:root {
+  /* Paper + ink */
+  --paper: #f7f3ea;
+  --paper-dark: #ede7d6;
+  --ink: #1a1a1a;
+  --ink-soft: #3a3a3a;
+  --ink-muted: #6a6359;
+  --rule: #1a1a1a;
+
+  /* Domain tints — low-saturation, warm pastels. Consistent across screens. */
+  --dom-commercial: #fde4d4;
+  --dom-demand: #fceecd;
+  --dom-supply_netops: #e3edd6;
+  --dom-manufacturing: #dce6ef;
+  --dom-logistics: #e9dff1;
+  --dom-procurement: #f3dcd4;
+
+  /* Flow kinds per brief */
+  --flow-material: #5a3b22;      /* earth-tone, heavy */
+  --flow-information: #3b6a96;   /* cool blue, light */
+  --flow-cash: #b78d2a;          /* gold, settlement-final */
+
+  /* Axiom severity */
+  --axiom-blocking: #c04a3a;
+  --axiom-warning: #d49a2a;
+  --axiom-advisory: #8a8070;
+
+  /* Diff states */
+  --diff-add: #4b8a4a;
+  --diff-change: #c9a227;
+  --diff-remove: #b24a3a;
+}

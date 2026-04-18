@@ -1,0 +1,7 @@
+/*
+ * Token entry point. Import this once at the app root.
+ */
+
+@import './colors.css';
+@import './typography.css';
+@import './reset.css';
