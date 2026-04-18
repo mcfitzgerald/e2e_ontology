@@ -1,12 +1,38 @@
 /*
- * Bottom-left legend panel. Matches the mockup's Legend component:
- * three flow kinds with their canonical stroke styles, the axiom-severity
- * dot, and the boundary-role marker.
+ * Bottom-left legend panel. Collapsible — when collapsed it shrinks to a
+ * small "legend" pill you can re-expand.
  */
 
+import { useLocalToggle } from '../../hooks/useLocalToggle';
+
 export function Legend() {
+  const [collapsed, setCollapsed] = useLocalToggle('editor.legendCollapsed', false);
+
+  if (collapsed) {
+    return (
+      <button
+        className="legend-pill"
+        onClick={() => setCollapsed(false)}
+        title="show legend"
+      >
+        ⓘ legend
+      </button>
+    );
+  }
+
   return (
     <aside className="legend">
+      <header className="legend-header">
+        <h5>legend</h5>
+        <button
+          className="legend-close"
+          onClick={() => setCollapsed(true)}
+          title="collapse legend"
+          aria-label="collapse legend"
+        >
+          ×
+        </button>
+      </header>
       <div className="legend-section">
         <h5>flow kinds</h5>
         <div className="legend-row">

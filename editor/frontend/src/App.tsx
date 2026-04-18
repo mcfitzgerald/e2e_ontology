@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useOntology } from './store/ontology';
 import { SketchyFilters } from './tokens/SketchyFilters';
 import { AppHeader } from './components/AppHeader';
+import { ContextPanel } from './components/ContextPanel';
 import { StructureScreen } from './screens/Structure';
 import './App.css';
 
@@ -19,7 +20,12 @@ export default function App() {
       <main className="app-main">
         {loading && <LoadingState />}
         {error && <ErrorState message={error} />}
-        {data && <StructureScreen data={data} />}
+        {data && (
+          <div className="app-canvas-with-rail">
+            <StructureScreen data={data} />
+            <ContextPanel data={data} />
+          </div>
+        )}
       </main>
     </div>
   );

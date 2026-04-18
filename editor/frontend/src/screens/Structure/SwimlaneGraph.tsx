@@ -12,7 +12,7 @@ interface Props {
 
 export function SwimlaneGraph({ data }: Props) {
   const selection = useOntology((s) => s.selection);
-  const select = useOntology((s) => s.select);
+  const navigate = useOntology((s) => s.navigate);
   const laneOrder = useSwimlaneOrder();
 
   const { layout, edges } = useMemo(() => {
@@ -32,7 +32,7 @@ export function SwimlaneGraph({ data }: Props) {
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       className="graph-svg"
       preserveAspectRatio="xMidYMid meet"
-      onClick={() => select(null)}
+      onClick={() => navigate(null)}
     >
       {/* Swimlane backgrounds */}
       {layout.swimlanes.map((lane, i) => (
@@ -73,7 +73,7 @@ export function SwimlaneGraph({ data }: Props) {
               key={e.flow.name}
               onClick={(evt) => {
                 evt.stopPropagation();
-                select({ kind: 'flow', id: e.flow.name });
+                navigate({ kind: 'flow', id: e.flow.name });
               }}
             >
               <path d={e.path} className={cls} markerEnd={`url(#arrow-${e.flow.kind})`} />
@@ -83,7 +83,7 @@ export function SwimlaneGraph({ data }: Props) {
               <AxiomBadge flow={e.flow} x={e.labelX} y={e.labelY} onClick={(ev) => {
                 ev.stopPropagation();
                 const ax = e.flow.axioms[0];
-                if (ax) select({ kind: 'axiom', id: ax.name });
+                if (ax) navigate({ kind: 'axiom', id: ax.name });
               }} />
             </g>
           );
@@ -102,7 +102,7 @@ export function SwimlaneGraph({ data }: Props) {
             dimmed={selection != null && !(selection.kind === 'role' && selection.id === role.name) && !highlighted.roles.has(role.name)}
             onClick={(evt) => {
               evt.stopPropagation();
-              select({ kind: 'role', id: role.name });
+              navigate({ kind: 'role', id: role.name });
             }}
           />
         ))}
@@ -195,7 +195,7 @@ interface Highlight {
   flows: Set<string>;
 }
 
-function computeHighlight(selection: Selection, flows: Flow[]): Highlight {
+function computeHighlight(selection: Selection | null, flows: Flow[]): Highlight {
   const roles = new Set<string>();
   const sFlows = new Set<string>();
   if (!selection) return { roles, flows: sFlows };

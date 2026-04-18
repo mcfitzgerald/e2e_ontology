@@ -12,6 +12,13 @@
   position: relative;
 }
 
+.app-canvas-with-rail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
 .status-pane {
   padding: 48px;
   max-width: 760px;

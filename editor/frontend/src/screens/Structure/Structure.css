@@ -172,13 +172,39 @@
   left: 12px;
   background: rgba(247, 243, 234, 0.95);
   border: 1.2px solid var(--ink);
-  padding: 8px 10px;
+  padding: 6px 10px 8px;
   font-size: 10.5px;
   border-radius: 3px;
   z-index: 10;
   max-width: 260px;
   font-family: var(--font-mono);
 }
+.legend-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.legend-header h5 {
+  margin: 0;
+  flex: 1;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  font-weight: 700;
+}
+.legend-close {
+  font-family: var(--font-mono);
+  background: transparent;
+  border: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.legend-close:hover { color: var(--ink); }
 .legend h5 {
   margin: 0 0 4px;
   font-size: 9.5px;
@@ -195,3 +221,20 @@
 }
 .legend-row svg { flex-shrink: 0; }
 .legend-section + .legend-section { margin-top: 6px; }
+
+.legend-pill {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: var(--paper);
+  border: 1.2px solid var(--ink);
+  padding: 4px 10px;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  border-radius: 3px;
+  z-index: 10;
+  cursor: pointer;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.legend-pill:hover { background: var(--paper-dark); }
