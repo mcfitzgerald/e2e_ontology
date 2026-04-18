@@ -1,4 +1,4 @@
-import type { OntologyPayload } from './types';
+import type { DiffPayload, GitStatus, OntologyPayload } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -25,3 +25,8 @@ async function get<T>(url: string): Promise<T> {
 }
 
 export const fetchOntology = (): Promise<OntologyPayload> => get<OntologyPayload>('/api/ontology');
+
+export const fetchDiff = (base = 'HEAD'): Promise<DiffPayload> =>
+  get<DiffPayload>(`/api/diff?base=${encodeURIComponent(base)}`);
+
+export const fetchGitStatus = (): Promise<GitStatus> => get<GitStatus>('/api/git-status');

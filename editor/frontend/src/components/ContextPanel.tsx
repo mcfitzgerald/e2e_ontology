@@ -2,6 +2,7 @@ import type { OntologyPayload } from '../api/types';
 import { useOntology } from '../store/ontology';
 import { useLocalToggle } from '../hooks/useLocalToggle';
 import { Breadcrumb } from './Breadcrumb';
+import { PanelDiff } from './PanelDiff';
 import { AxiomPanel } from './panels/AxiomPanel';
 import { EntityPanel } from './panels/EntityPanel';
 import { EventPanel } from './panels/EventPanel';
@@ -58,7 +59,14 @@ export function ContextPanel({ data }: Props) {
           ›
         </button>
       </div>
-      {selection ? <PanelBody /> : <EmptyState />}
+      {selection ? (
+        <>
+          <PanelDiff selectionKind={selection.kind} name={selection.id} />
+          <PanelBody />
+        </>
+      ) : (
+        <EmptyState />
+      )}
     </aside>
   );
 

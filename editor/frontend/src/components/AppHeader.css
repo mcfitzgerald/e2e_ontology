@@ -33,6 +33,47 @@
   letter-spacing: 0.02em;
 }
 
+/* Branch badge — mockup line 144–153, with diff-count split into per-status
+ * spans so each segment can carry its own color. */
+.branch-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--paper-dark);
+  border: 1px dashed var(--ink-muted);
+  padding: 3px 8px;
+  border-radius: 3px;
+  color: var(--ink-soft);
+  margin-left: 18px;
+  white-space: nowrap;
+}
+.branch-badge b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.branch-badge-key {
+  color: var(--ink-muted);
+}
+.branch-badge-sha {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+.branch-badge .diff-count {
+  font-weight: 600;
+}
+.branch-badge .diff-add {
+  color: var(--diff-add);
+}
+.branch-badge .diff-change {
+  color: var(--diff-change);
+}
+.branch-badge .diff-remove {
+  color: var(--diff-remove);
+}
+.branch-badge .diff-clean {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
 .screen-tabs {
   display: flex;
   gap: 4px;

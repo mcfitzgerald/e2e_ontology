@@ -269,6 +269,93 @@
   color: var(--ink);
 }
 
+/* ===== Panel diff banner (Phase 3) ===== */
+/* Mockup line 325-335. Caret swapped to JetBrains Mono per AGENTS.md
+ * (no handwritten fonts) — flagged in the parity memo. */
+.panel-diff {
+  background: #fff6cf;
+  border-left: 3px solid var(--diff-change);
+  padding: 6px 10px;
+  font-size: 11px;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel-diff.added {
+  border-left-color: var(--diff-add);
+  background: #e8f1e3;
+}
+.panel-diff.removed {
+  border-left-color: var(--diff-remove);
+  background: #f4e0db;
+}
+.panel-diff-caret {
+  font-weight: 700;
+  margin-right: 4px;
+  color: var(--ink);
+}
+.panel-diff.added .panel-diff-caret { color: var(--diff-add); }
+.panel-diff.changed .panel-diff-caret { color: var(--diff-change); }
+.panel-diff.removed .panel-diff-caret { color: var(--diff-remove); }
+.panel-diff-summary {
+  font-weight: 600;
+}
+.panel-diff-fields {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px dotted var(--ink-muted);
+  padding-top: 6px;
+}
+.panel-diff-fields li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10.5px;
+}
+.panel-diff-path {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.panel-diff-arrow {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+.panel-diff-del {
+  text-decoration: line-through;
+  color: var(--diff-remove);
+  background: transparent;
+  padding: 0 2px;
+  font-size: 10.5px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-diff-ins {
+  text-decoration: none;
+  background: #d6e8d6;
+  color: var(--ink);
+  padding: 0 2px;
+  font-size: 10.5px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ===== Hint block ===== */
 .panel-hint {
   border-left: 3px solid var(--ink);

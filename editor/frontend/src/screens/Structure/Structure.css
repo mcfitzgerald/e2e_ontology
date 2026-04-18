@@ -137,6 +137,88 @@
   pointer-events: none;
 }
 
+/* ===== Ambient diff indicators (Phase 3) ===== */
+/* Gutter flag pulled OUTSIDE the role box. Selector specificity has to beat
+ * `.node-role rect { fill: var(--paper) }` — that was silently overriding
+ * the gutter color on first cut. Hence `.node-role .diff-gutter`. */
+.diff-gutter-group {
+  pointer-events: none;
+}
+.node-role .diff-gutter {
+  fill: #e02020;
+  stroke: var(--ink);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.node-role .diff-gutter.added { fill: var(--diff-add); }
+.node-role .diff-gutter.removed { fill: var(--diff-remove); }
+.node-role .diff-gutter-glyph {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: #ffffff;
+  pointer-events: none;
+}
+
+/* Edge underlay — wider semi-transparent stroke under the kind-styled edge.
+ * Foregrounds the kind discriminator (material thick / info dashed / cash
+ * doubled) while still flagging the diff status. The mockup didn't style
+ * edges with diff color, only roles + axiom dots; this is intentional drift
+ * called out in the parity memo. */
+.flow-edge-diff-underlay {
+  fill: none;
+  pointer-events: none;
+  stroke-width: 7;
+  opacity: 0.45;
+}
+.flow-edge-diff-underlay.added { stroke: var(--diff-add); }
+.flow-edge-diff-underlay.changed { stroke: var(--diff-change); }
+
+/* ===== Removed-elements callout (Phase 3) ===== */
+.removed-since-head {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  background: var(--paper);
+  border: 1.2px solid var(--diff-remove);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 70%;
+  flex-wrap: wrap;
+}
+.removed-since-head-label {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--diff-remove);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.removed-since-head-chip {
+  padding: 1px 6px;
+  border: 1px dashed var(--diff-remove);
+  border-radius: 2px;
+  background: var(--paper-dark);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.removed-since-head-chip-kind {
+  color: var(--ink-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: 4px;
+}
+
 /* ===== Axiom badges on edges ===== */
 .axiom-badge { cursor: pointer; }
 .axiom-badge circle {
@@ -166,15 +248,19 @@
 }
 
 /* ===== Legend ===== */
+/* Anchored flush to bottom-left so both expanded and collapsed states read
+ * as part of the canvas frame rather than floating in space. */
 .legend {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
-  background: rgba(247, 243, 234, 0.95);
+  bottom: 0;
+  left: 0;
+  background: rgba(247, 243, 234, 0.97);
   border: 1.2px solid var(--ink);
+  border-left: none;
+  border-bottom: none;
+  border-radius: 0 3px 0 0;
   padding: 6px 10px 8px;
   font-size: 10.5px;
-  border-radius: 3px;
   z-index: 10;
   max-width: 260px;
   font-family: var(--font-mono);
@@ -224,14 +310,16 @@
 
 .legend-pill {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
+  bottom: 0;
+  left: 0;
   background: var(--paper);
   border: 1.2px solid var(--ink);
-  padding: 4px 10px;
+  border-left: none;
+  border-bottom: none;
+  border-radius: 0 3px 0 0;
+  padding: 4px 12px;
   font-size: 10.5px;
   font-family: var(--font-mono);
-  border-radius: 3px;
   z-index: 10;
   cursor: pointer;
   color: var(--ink);

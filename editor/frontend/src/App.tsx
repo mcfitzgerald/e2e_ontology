@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useOntology } from './store/ontology';
+import { useDiff } from './store/diff';
 import { SketchyFilters } from './tokens/SketchyFilters';
 import { AppHeader } from './components/AppHeader';
 import { ContextPanel } from './components/ContextPanel';
@@ -8,10 +9,18 @@ import './App.css';
 
 export default function App() {
   const { data, loading, error, load } = useOntology();
+  const loadDiff = useDiff((s) => s.load);
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadDiff();
+  }, [load, loadDiff]);
+
+  useEffect(() => {
+    const onFocus = () => loadDiff();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [loadDiff]);
 
   return (
     <div className="app">

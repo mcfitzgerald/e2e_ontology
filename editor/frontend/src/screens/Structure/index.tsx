@@ -1,5 +1,6 @@
 import type { OntologyPayload } from '../../api/types';
 import { Legend } from './Legend';
+import { RemovedSinceHead } from './RemovedSinceHead';
 import { SwimlaneGraph } from './SwimlaneGraph';
 import './Structure.css';
 
@@ -12,6 +13,7 @@ export function StructureScreen({ data }: Props) {
     <section className="structure">
       <div className="structure-canvas">
         <SwimlaneGraph data={data} />
+        <RemovedSinceHead />
         <Legend />
       </div>
     </section>

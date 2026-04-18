@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import type { Flow, OntologyPayload, Role } from '../../api/types';
+import type { DiffStatus, Flow, OntologyPayload, Role } from '../../api/types';
 import { orderedDomains } from '../../config/domains';
 import { useOntology, type Selection } from '../../store/ontology';
+import { diffStatus, useDiff } from '../../store/diff';
 import { moveLane, useSwimlaneOrder } from '../../store/swimlaneOrder';
 import { computeLayout, ROLE_HEIGHT, ROLE_WIDTH, type LaidOutRole } from './layout';
 import { computeEdges } from './edgeGeometry';
@@ -14,6 +15,7 @@ export function SwimlaneGraph({ data }: Props) {
   const selection = useOntology((s) => s.selection);
   const navigate = useOntology((s) => s.navigate);
   const laneOrder = useSwimlaneOrder();
+  const statusIndex = useDiff((s) => s.statusIndex);
 
   const { layout, edges } = useMemo(() => {
     const usedDomains = new Set<string>();
@@ -67,7 +69,16 @@ export function SwimlaneGraph({ data }: Props) {
         {edges.map((e) => {
           const isSel = selection?.kind === 'flow' && selection.id === e.flow.name;
           const dim = selection != null && !isSel && !edgeTouchesHighlight(e.flow, highlighted);
-          const cls = `flow-edge ${e.flow.kind}${isSel ? ' selected' : ''}${dim ? ' dimmed' : ''}`;
+          const status = diffStatus(statusIndex, 'flows', e.flow.name);
+          const cls = [
+            'flow-edge',
+            e.flow.kind,
+            isSel ? 'selected' : '',
+            dim ? 'dimmed' : '',
+            status ? `diff-${status}` : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
           return (
             <g
               key={e.flow.name}
@@ -76,6 +87,9 @@ export function SwimlaneGraph({ data }: Props) {
                 navigate({ kind: 'flow', id: e.flow.name });
               }}
             >
+              {status && status !== 'removed' && (
+                <path d={e.path} className={`flow-edge-diff-underlay ${status}`} />
+              )}
               <path d={e.path} className={cls} markerEnd={`url(#arrow-${e.flow.kind})`} />
               {e.flow.kind === 'cash' && (
                 <path d={e.path} className="flow-edge-cash-inner" />
@@ -100,6 +114,7 @@ export function SwimlaneGraph({ data }: Props) {
             y={y}
             selected={selection?.kind === 'role' && selection.id === role.name}
             dimmed={selection != null && !(selection.kind === 'role' && selection.id === role.name) && !highlighted.roles.has(role.name)}
+            diffStatus={diffStatus(statusIndex, 'roles', role.name)}
             onClick={(evt) => {
               evt.stopPropagation();
               navigate({ kind: 'role', id: role.name });
@@ -147,10 +162,11 @@ interface RoleNodeProps {
   y: number;
   selected: boolean;
   dimmed: boolean;
+  diffStatus: DiffStatus | null;
   onClick: (e: React.MouseEvent) => void;
 }
 
-function RoleNode({ role, x, y, selected, dimmed, onClick }: RoleNodeProps) {
+function RoleNode({ role, x, y, selected, dimmed, diffStatus, onClick }: RoleNodeProps) {
   const cls = ['node-role'];
   if (role.is_boundary) cls.push('boundary');
   if (selected) cls.push('selected');
@@ -161,6 +177,26 @@ function RoleNode({ role, x, y, selected, dimmed, onClick }: RoleNodeProps) {
     <g transform={`translate(${x}, ${y})`} className={cls.join(' ')} onClick={onClick}>
       <rect x={-halfW} y={-halfH} width={ROLE_WIDTH} height={ROLE_HEIGHT} rx={2} />
       <text textAnchor="middle" y={4}>{role.name}</text>
+      {diffStatus && diffStatus !== 'removed' && (
+        <g className={`diff-gutter-group ${diffStatus}`}>
+          <title>{diffStatus} since HEAD</title>
+          <rect
+            x={-halfW - 8}
+            y={-halfH - 2}
+            width={6}
+            height={ROLE_HEIGHT + 4}
+            className={`diff-gutter ${diffStatus}`}
+          />
+          <text
+            x={-halfW - 5}
+            y={4}
+            textAnchor="middle"
+            className={`diff-gutter-glyph ${diffStatus}`}
+          >
+            {diffStatus === 'added' ? '+' : '~'}
+          </text>
+        </g>
+      )}
       {role.human_involvement && role.human_involvement !== 'autonomous' && (
         <g className="hitl-badge" transform={`translate(${halfW - 8}, ${-halfH + 6})`}>
           <circle r={8} />
@@ -182,10 +218,11 @@ function AxiomBadge({ flow, x, y, onClick }: AxiomBadgeProps) {
   if (flow.axioms.length === 0) return null;
   const sev = flow.axioms[0]!.severity ?? 'advisory';
   const color = sev === 'blocking' ? '#c04a3a' : sev === 'warning' ? '#d49a2a' : '#8a8070';
+  const tip = `${sev} axiom: ${flow.axioms[0]!.name}`;
   return (
     <g className="axiom-badge" transform={`translate(${x}, ${y})`} onClick={onClick}>
-      <circle r={8} fill={color} />
-      <text textAnchor="middle" y={3}>!</text>
+      <title>{tip}</title>
+      <circle r={5} fill={color} />
     </g>
   );
 }

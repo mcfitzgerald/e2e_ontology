@@ -115,3 +115,58 @@ export interface OntologyPayload {
     warnings: number;
   };
 }
+
+/* ===== Diff payload (mirror of editor/backend/diff.py) ===== */
+
+export type DiffKind =
+  | 'roles'
+  | 'flows'
+  | 'events'
+  | 'state_machines'
+  | 'entities'
+  | 'enums'
+  | 'warnings';
+
+export type DiffStatus = 'added' | 'changed' | 'removed';
+
+export interface FieldChange {
+  path: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface ElementChange {
+  name: string;
+  changes: FieldChange[];
+}
+
+export interface KindDelta {
+  added: string[];
+  removed: string[];
+  changed: ElementChange[];
+}
+
+export interface DiffSummary {
+  added: number;
+  changed: number;
+  removed: number;
+}
+
+export interface DiffPayload {
+  base: string;
+  base_resolved: string | null;
+  head: string;
+  head_path: string;
+  kinds: Partial<Record<DiffKind, KindDelta>>;
+  summary: DiffSummary;
+}
+
+export interface GitStatus {
+  branch: string | null;
+  branch_label: string | null;
+  head_short: string | null;
+  ahead: number | null;
+  behind: number | null;
+  dirty: boolean | null;
+  reason: string | null;
+}
