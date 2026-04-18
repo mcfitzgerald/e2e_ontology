@@ -1,13 +1,11 @@
 /*
- * Typography tokens — JetBrains Mono for structure, Caveat/Shadows Into Light
- * for hand-drawn annotations. Extracted from mockup's Google Fonts @import
- * and font-family declarations.
+ * Typography tokens — JetBrains Mono for all text. The Claude Design
+ * mockup's Caveat / Shadows Into Light accents were tool flourish, not a
+ * design choice; the real editor uses professional mono throughout.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Caveat:wght@500;700&family=Shadows+Into+Light&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-hand: "Caveat", "Shadows Into Light", cursive;
-  --font-sketch: "Shadows Into Light", "Caveat", cursive;
 }

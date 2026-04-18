@@ -43,5 +43,6 @@ Every screen requires a parity review before merge.
 - React Flow (`@xyflow/react`) for the graph surface. Dagre (`@dagrejs/dagre`) for auto-layout.
 - Zustand for state. No Redux.
 - Plain CSS modules + CSS custom properties. No Tailwind, no styled-components, no CSS-in-JS.
+- Fonts: JetBrains Mono only. The mockup's Caveat / Shadows Into Light were design-tool flourish, not design intent — do not reintroduce handwritten fonts. Use weight / size / color for hierarchy.
 - Inline SVG for icons/glyphs. No icon libraries.
 - FastAPI + uvicorn for the backend. Deps via `uv run --with …`, consistent with repo convention.
