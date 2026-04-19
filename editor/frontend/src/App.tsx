@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import { useOntology } from './store/ontology';
 import { useDiff } from './store/diff';
+import { useScreen } from './store/screen';
 import { SketchyFilters } from './tokens/SketchyFilters';
 import { AppHeader } from './components/AppHeader';
 import { ContextPanel } from './components/ContextPanel';
 import { StructureScreen } from './screens/Structure';
+import { CascadeScreen } from './screens/Cascade';
+import { FSMScreen } from './screens/FSM';
 import './App.css';
 
 export default function App() {
@@ -31,13 +34,25 @@ export default function App() {
         {error && <ErrorState message={error} />}
         {data && (
           <div className="app-canvas-with-rail">
-            <StructureScreen data={data} />
+            <ScreenRouter data={data} />
             <ContextPanel data={data} />
           </div>
         )}
       </main>
     </div>
   );
+}
+
+function ScreenRouter({ data }: { data: import('./api/types').OntologyPayload }) {
+  const current = useScreen((s) => s.current);
+  switch (current) {
+    case 'structure':
+      return <StructureScreen data={data} />;
+    case 'cascade':
+      return <CascadeScreen data={data} />;
+    case 'fsm':
+      return <FSMScreen data={data} />;
+  }
 }
 
 function LoadingState() {
