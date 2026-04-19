@@ -1,6 +1,5 @@
 import type { OntologyPayload } from '../api/types';
 import { useOntology } from '../store/ontology';
-import { useLocalToggle } from '../hooks/useLocalToggle';
 import { Breadcrumb } from './Breadcrumb';
 import { PanelDiff } from './PanelDiff';
 import { AxiomPanel } from './panels/AxiomPanel';
@@ -20,23 +19,25 @@ import './ContextPanel.css';
 
 interface Props {
   data: OntologyPayload;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
 /**
- * Right-rail context panel. Collapsible via the chevron at the top-right
- * of the panel or the thin expand strip when collapsed. Always mounted so
- * the user's selection state persists behind the collapse.
+ * Right-rail context panel. The outer Panel's width is owned by App via
+ * react-resizable-panels; `collapsed` here just flips the rendered content
+ * between the expanded aside and the slim expand affordance. App mirrors
+ * this state onto the Panel's imperative collapse/expand API.
  */
-export function ContextPanel({ data }: Props) {
+export function ContextPanel({ data, collapsed, onToggleCollapsed }: Props) {
   const selection = useOntology((s) => s.selection);
   const navigate = useOntology((s) => s.navigate);
-  const [collapsed, setCollapsed] = useLocalToggle('editor.railCollapsed', false);
 
   if (collapsed) {
     return (
       <button
         className="context-panel-collapsed"
-        onClick={() => setCollapsed(false)}
+        onClick={onToggleCollapsed}
         title="expand context panel"
         aria-label="expand context panel"
       >
@@ -52,7 +53,7 @@ export function ContextPanel({ data }: Props) {
         <Breadcrumb />
         <button
           className="context-panel-collapse-btn"
-          onClick={() => setCollapsed(true)}
+          onClick={onToggleCollapsed}
           title="collapse context panel"
           aria-label="collapse context panel"
         >

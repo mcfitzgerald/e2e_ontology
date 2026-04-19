@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import type { Flow, OntologyPayload } from '../../api/types';
 import { domainFor } from '../../config/domains';
 import { useOntology } from '../../store/ontology';
@@ -42,7 +43,8 @@ export function CascadeScreen({ data }: Props) {
   const rolesByName = useMemo(() => new Map(data.roles.map((r) => [r.name, r])), [data.roles]);
 
   return (
-    <section className="cascade">
+    <PanelGroup direction="horizontal" autoSaveId="editor.layout.cascade" className="cascade">
+      <Panel defaultSize={22} minSize={14} maxSize={40} className="cascade-rail-panel">
       <aside className="cascade-rail" aria-label="cascade controls">
         <h4>start flow</h4>
         <select
@@ -103,7 +105,9 @@ export function CascadeScreen({ data }: Props) {
           recovery flow.
         </div>
       </aside>
-
+      </Panel>
+      <PanelResizeHandle className="cascade-resize-handle" />
+      <Panel defaultSize={78} minSize={40} className="cascade-canvas-panel">
       <div className="cascade-canvas">
         {steps.length === 0 ? (
           <div className="cascade-empty">
@@ -113,9 +117,7 @@ export function CascadeScreen({ data }: Props) {
           <svg
             className="cascade-svg"
             viewBox={`0 0 ${layout.width} ${layout.height}`}
-            width={layout.width}
-            height={layout.height}
-            preserveAspectRatio="xMinYMin meet"
+            preserveAspectRatio="xMidYMid meet"
             onClick={() => navigate(null)}
           >
             {/* Swimlane backgrounds */}
@@ -216,7 +218,8 @@ export function CascadeScreen({ data }: Props) {
           </svg>
         )}
       </div>
-    </section>
+      </Panel>
+    </PanelGroup>
   );
 }
 

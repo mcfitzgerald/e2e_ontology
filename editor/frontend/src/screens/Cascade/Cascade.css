@@ -6,20 +6,58 @@
  */
 
 .cascade {
-  display: flex;
   flex: 1;
   min-height: 0;
   background: var(--paper);
 }
 
-.cascade-rail {
-  width: 240px;
+/* PanelGroup children for the cascade screen. Panels wrap the rail and
+ * canvas so they can be resized independently from the outer layout. */
+.cascade-rail-panel,
+.cascade-canvas-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cascade-resize-handle {
   flex-shrink: 0;
+  width: 6px;
+  background: var(--paper);
+  border-right: 1.5px solid var(--ink);
+  cursor: col-resize;
+  position: relative;
+  transition: background 120ms ease;
+}
+.cascade-resize-handle:hover,
+.cascade-resize-handle[data-resize-handle-active] {
+  background: var(--paper-dark);
+}
+.cascade-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  margin-left: -1px;
+  margin-top: -14px;
+  background: var(--ink-muted);
+  opacity: 0.5;
+  border-radius: 1px;
+}
+.cascade-resize-handle:hover::after { opacity: 1; }
+
+.cascade-rail {
+  width: 100%;
+  height: 100%;
   border-right: 1.5px solid var(--ink);
   padding: 14px 14px 40px;
   overflow-y: auto;
   font-family: var(--font-mono);
   background: var(--paper);
+  box-sizing: border-box;
 }
 
 .cascade-rail h4 {
@@ -123,17 +161,18 @@
 }
 
 .cascade-canvas {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
+  height: 100%;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   background: var(--paper);
+  box-sizing: border-box;
 }
 
 .cascade-svg {
   display: block;
-  min-width: 100%;
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .cascade-empty {
