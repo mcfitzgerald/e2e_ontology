@@ -137,6 +137,181 @@
   pointer-events: none;
 }
 
+/* ===== React Flow port (Phase 4b, Commit B) =====
+ * New role-node rules target HTML elements rendered inside React Flow's
+ * node wrapper. Old `.node-role rect` SVG rules above are retained only
+ * as a safety net during the port; the SVG they styled no longer mounts.
+ */
+.rf-role-node {
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 170px;
+  min-height: 36px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+}
+.rf-role-node.boundary {
+  border-style: dashed;
+  border-width: 1.5px;
+}
+.rf-role-node.selected {
+  border-width: 2.5px;
+  background: #fff6cf;
+}
+.rf-role-node.dimmed {
+  opacity: 0.28;
+}
+.rf-role-name {
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+/* Handles — hidden; edges still need them as attachment points */
+.rf-handle {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* HITL badge (HTML span, absolute-positioned top-right) */
+.rf-hitl-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff6cf;
+  border: 1px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Diff gutter flag — tab pinned to the node's left edge */
+.rf-diff-gutter {
+  position: absolute;
+  left: -10px;
+  top: -2px;
+  bottom: -2px;
+  width: 10px;
+  border: 1px solid var(--ink);
+  border-right: none;
+  border-radius: 2px 0 0 2px;
+  background: #e02020;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  line-height: 1;
+}
+.rf-diff-gutter.added {
+  background: var(--diff-add);
+}
+.rf-diff-gutter.removed {
+  background: var(--diff-remove);
+}
+
+/* Axiom dot at edge midpoint — rendered via EdgeLabelRenderer as an HTML
+ * span positioned absolutely in the flow's viewport. */
+.rf-axiom-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* React Flow internal overrides — our custom node owns the border, the
+ * default wrapper shouldn't outline it. */
+.react-flow__node {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+.react-flow__node.selected {
+  box-shadow: none;
+}
+.react-flow__node-roleNode {
+  border: none;
+  background: transparent;
+}
+.react-flow__edge-path {
+  stroke: var(--ink-soft);
+}
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.react-flow__controls button {
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink-muted);
+  color: var(--ink);
+}
+.react-flow__controls button:hover {
+  background: var(--paper-dark);
+}
+.react-flow__attribution {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  opacity: 0.5;
+  background: transparent;
+}
+
+/* Let swimlane tints show through — the ReactFlow root would otherwise
+ * paint solid paper and mask the ViewportPortal'd backgrounds. */
+.structure-canvas .react-flow,
+.structure-canvas .react-flow__renderer,
+.structure-canvas .react-flow__pane {
+  background: transparent;
+}
+.structure-canvas .react-flow__background {
+  background: var(--paper);
+}
+
+/* ViewportPortal normally stacks on top of edges + nodes because it renders
+ * last in DOM order. For the swimlane background we need it BELOW. Setting
+ * z-index on the portal wrapper via the shared class is fine because we
+ * only use ViewportPortal for backgrounds. */
+.structure-canvas .react-flow__viewport-portal {
+  z-index: -1;
+}
+.rf-swimlane-layer {
+  overflow: visible;
+}
+
 /* ===== Ambient diff indicators (Phase 3) ===== */
 /* Gutter flag pulled OUTSIDE the role box. Selector specificity has to beat
  * `.node-role rect { fill: var(--paper) }` — that was silently overriding
