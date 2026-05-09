@@ -296,3 +296,188 @@
 .cascade-card-axiom.blocking { fill: var(--axiom-blocking); }
 .cascade-card-axiom.warning { fill: var(--axiom-warning); }
 .cascade-card-axiom.advisory { fill: var(--axiom-advisory); }
+
+/* ===== React Flow port (Phase 4b Commit C) ===== */
+.rf-cascade-card {
+  width: 260px;
+  height: 64px;
+  background: var(--paper);
+  border: 1.2px solid var(--ink);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+.rf-cascade-card.selected {
+  border-width: 2.2px;
+  background: #fff6cf;
+}
+.rf-cascade-card.dimmed {
+  opacity: 0.28;
+}
+.rf-cascade-card-band-src,
+.rf-cascade-card-band-dst {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  pointer-events: none;
+}
+.rf-cascade-card-band-src { top: 0; }
+.rf-cascade-card-band-dst { bottom: 0; }
+.rf-cascade-card-body {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  right: 56px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.rf-cascade-card-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-cascade-card-route {
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-cascade-card-kind {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 42px;
+  height: 16px;
+  border-radius: 1px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--paper);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+.rf-cascade-card-kind.information { background: var(--flow-information); }
+.rf-cascade-card-kind.material { background: var(--flow-material); }
+.rf-cascade-card-kind.cash { background: var(--flow-cash); }
+.rf-cascade-card-axiom {
+  position: absolute;
+  top: 36px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.rf-cascade-card-axiom.blocking { background: var(--axiom-blocking); }
+.rf-cascade-card-axiom.warning { background: var(--axiom-warning); }
+.rf-cascade-card-axiom.advisory { background: var(--axiom-advisory); }
+
+/* Arrow labels rendered as HTML via EdgeLabelRenderer — paper background
+ * means no hand-measured bib, and React Flow positions at the true edge
+ * midpoint so labels don't overrun cards at tight spacing. */
+.rf-cascade-arrow-label {
+  position: absolute;
+  background: var(--paper);
+  border: 1px solid var(--ink-muted);
+  border-radius: 2px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-cascade-arrow-label.axiom_trip {
+  color: var(--axiom-blocking);
+  border-color: var(--axiom-blocking);
+  font-weight: 600;
+}
+
+/* React Flow internal overrides, scoped to cascade so they don't leak */
+.cascade-canvas .react-flow,
+.cascade-canvas .react-flow__renderer,
+.cascade-canvas .react-flow__pane {
+  background: transparent;
+}
+.cascade-canvas .react-flow__viewport-portal {
+  z-index: -1;
+}
+.cascade-canvas .react-flow__node {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.cascade-canvas .react-flow__node.selected {
+  box-shadow: none;
+}
+.cascade-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.cascade-canvas .react-flow__controls button {
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink-muted);
+  color: var(--ink);
+}
+.cascade-canvas .react-flow__controls button:hover {
+  background: var(--paper-dark);
+}
+.cascade-canvas .react-flow__attribution {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  opacity: 0.5;
+  background: transparent;
+}
+.cascade-canvas .rf-handle {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* Bring back cascade-arrow stroke rules in SVG inside ReactFlow */
+.cascade-canvas .cascade-arrow {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.2;
+}
+.cascade-canvas .cascade-arrow.axiom_trip {
+  stroke: var(--axiom-blocking);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+}
+.cascade-canvas .cascade-arrow.dimmed {
+  opacity: 0.25;
+}
+.cascade-canvas .cascade-arrow.selected {
+  stroke-width: 2;
+}

@@ -4,7 +4,7 @@ import type { CascadeStep } from './traversal';
 
 export const CARD_WIDTH = 260;
 export const CARD_HEIGHT = 64;
-const COL_WIDTH = 340;
+export const COL_WIDTH = 340;
 const LANE_HEIGHT = 96;
 const LANE_GAP = 14;
 const LANE_TOP_PAD = 48;
