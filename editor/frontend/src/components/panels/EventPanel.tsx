@@ -43,7 +43,7 @@ export function EventPanel({ event, data, onNavigate }: Props) {
       </Section>
 
       {event.llm_prompt_hint && (
-        <HintBlock label="llm prompt hint">{event.llm_prompt_hint}</HintBlock>
+        <HintBlock label="llm context">{event.llm_prompt_hint}</HintBlock>
       )}
     </article>
   );

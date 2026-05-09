@@ -98,7 +98,7 @@ export function FlowPanel({ flow, data, onNavigate }: Props) {
       )}
 
       {flow.llm_prompt_hint && (
-        <HintBlock label="llm prompt hint">{flow.llm_prompt_hint}</HintBlock>
+        <HintBlock label="llm context">{flow.llm_prompt_hint}</HintBlock>
       )}
     </article>
   );

@@ -76,7 +76,7 @@ export function RolePanel({ role, data, onNavigate }: Props) {
       )}
 
       {role.llm_prompt_hint && (
-        <HintBlock label="llm prompt hint">{role.llm_prompt_hint}</HintBlock>
+        <HintBlock label="llm context">{role.llm_prompt_hint}</HintBlock>
       )}
     </article>
   );
