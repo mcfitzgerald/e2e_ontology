@@ -1,0 +1,444 @@
+/* ===== FSM detail screen =====
+ * Horizontal lifecycle diagram. States as nodes, transitions as edges.
+ * Initial state carries an entry-arrow glyph; terminal states wear a
+ * concentric outer border (classic accept-state notation). Guard axioms
+ * surface as clickable chips on the transition label.
+ */
+
+.fsm {
+  flex: 1;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.fsm-rail-panel,
+.fsm-canvas-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fsm-resize-handle {
+  flex-shrink: 0;
+  width: 6px;
+  background: var(--paper);
+  border-right: 1.5px solid var(--ink);
+  cursor: col-resize;
+  position: relative;
+  transition: background 120ms ease;
+}
+.fsm-resize-handle:hover,
+.fsm-resize-handle[data-resize-handle-active] {
+  background: var(--paper-dark);
+}
+.fsm-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  margin-left: -1px;
+  margin-top: -14px;
+  background: var(--ink-muted);
+  opacity: 0.5;
+  border-radius: 1px;
+}
+.fsm-resize-handle:hover::after { opacity: 1; }
+
+.fsm-rail {
+  width: 100%;
+  height: 100%;
+  border-right: 1.5px solid var(--ink);
+  padding: 14px 14px 40px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  background: var(--paper);
+  box-sizing: border-box;
+}
+.fsm-rail h4 {
+  margin: 16px 0 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.fsm-rail h4:first-of-type { margin-top: 0; }
+
+.fsm-picker {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid var(--ink-muted);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 2px;
+}
+.fsm-picker:focus { border-color: var(--ink); outline: none; }
+
+.fsm-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.fsm-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fsm-summary-k {
+  color: var(--ink-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.fsm-summary-v {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  text-align: right;
+  word-break: break-word;
+}
+
+.fsm-rail-transitions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fsm-rail-transitions li {
+  border-left: 2px solid var(--ink-muted);
+  padding: 4px 8px;
+  background: var(--paper-dark);
+  font-size: 11px;
+}
+.fsm-rail-state {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  background: var(--paper);
+  padding: 1px 4px;
+  border: 1px solid var(--ink-muted);
+  border-radius: 2px;
+  font-size: 10.5px;
+}
+.fsm-rail-arrow {
+  margin: 0 6px;
+  color: var(--ink-muted);
+}
+.fsm-rail-trigger {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+button.fsm-rail-trigger.clickable {
+  display: inline-block;
+  font-family: var(--font-mono);
+  background: var(--paper);
+  border: 1px solid var(--ink-muted);
+  padding: 1px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+button.fsm-rail-trigger.clickable:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.fsm-rail-guard {
+  margin-top: 4px;
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--paper);
+  border: 1px solid var(--axiom-blocking);
+  color: var(--axiom-blocking);
+  padding: 1px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.fsm-rail-guard:hover {
+  background: var(--axiom-blocking);
+  color: var(--paper);
+}
+
+.fsm-rail-sharing {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fsm-rail-share {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 4px 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fsm-rail-share:hover {
+  background: var(--paper-dark);
+  color: var(--ink);
+}
+.fsm-rail-share-glyph {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.fsm-rail-share-glyph.information { background: var(--flow-information); }
+.fsm-rail-share-glyph.material { background: var(--flow-material); }
+.fsm-rail-share-glyph.cash { background: var(--flow-cash); }
+.fsm-rail-empty {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.fsm-note {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--ink-muted);
+  padding: 6px 8px;
+  background: var(--paper-dark);
+  margin-top: 12px;
+}
+.fsm-note-label {
+  display: block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+
+.fsm-canvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+  box-sizing: border-box;
+}
+.fsm-empty {
+  padding: 60px 40px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* ===== State node ===== */
+.rf-fsm-state {
+  width: 180px;
+  height: 56px;
+  background: var(--paper);
+  border: 1.4px solid var(--ink);
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+}
+.rf-fsm-state.selected {
+  border-width: 2.4px;
+  background: #fff6cf;
+}
+.rf-fsm-state.dimmed { opacity: 0.3; }
+.rf-fsm-state.terminal {
+  /* Tighten the inner rect so the concentric outer ring (rendered as a
+   * pseudo-element) reads as a true double-rule. */
+  background: var(--paper);
+}
+.rf-fsm-state-terminal-ring {
+  position: absolute;
+  inset: -5px;
+  border: 1.2px solid var(--ink);
+  border-radius: 5px;
+  pointer-events: none;
+}
+.rf-fsm-state-entry {
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--ink);
+  pointer-events: none;
+  line-height: 1;
+}
+.rf-fsm-state-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+.rf-fsm-state-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-fsm-state-tags {
+  display: flex;
+  gap: 4px;
+}
+.rf-fsm-state-tag {
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  background: var(--paper-dark);
+  padding: 0 4px;
+  border-radius: 1px;
+  line-height: 1.5;
+}
+.rf-fsm-state-tag.terminal {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ===== Transition edge ===== */
+.fsm-canvas .rf-fsm-transition {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.4;
+}
+.fsm-canvas .rf-fsm-transition.selected {
+  stroke: var(--axiom-blocking);
+  stroke-width: 2.2;
+}
+.fsm-canvas .rf-fsm-transition.dimmed {
+  opacity: 0.25;
+}
+
+.rf-fsm-transition-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  z-index: 12;
+  transition: z-index 0s, filter 120ms ease;
+}
+.rf-fsm-transition-label:hover {
+  z-index: 50;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+}
+.rf-fsm-transition-trigger {
+  background: var(--paper);
+  border: 1px solid var(--ink-muted);
+  border-radius: 2px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+}
+button.rf-fsm-transition-trigger.clickable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+button.rf-fsm-transition-trigger.clickable:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.rf-fsm-transition-guard {
+  font-family: var(--font-mono);
+  background: var(--paper);
+  border: 1px solid var(--axiom-blocking);
+  color: var(--axiom-blocking);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.rf-fsm-transition-guard:hover {
+  background: var(--axiom-blocking);
+  color: var(--paper);
+}
+.rf-fsm-transition-guard.unresolved {
+  border-color: var(--ink-muted);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+.rf-fsm-transition-guard.unresolved:hover {
+  background: var(--paper);
+  color: var(--ink-muted);
+}
+
+/* React Flow internal overrides scoped to fsm */
+.fsm-canvas .react-flow,
+.fsm-canvas .react-flow__renderer,
+.fsm-canvas .react-flow__pane {
+  background: transparent;
+}
+/* Float edge labels above the node layer so transition labels don't
+ * disappear behind state boxes when smoothstep paths route close to a
+ * state. Hover bumps them higher for direct-pick legibility. */
+.fsm-canvas .react-flow__edgelabel-renderer {
+  z-index: 11;
+}
+.fsm-canvas .react-flow__node {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.fsm-canvas .react-flow__node.selected {
+  box-shadow: none;
+}
+.fsm-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.fsm-canvas .react-flow__controls button {
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink-muted);
+  color: var(--ink);
+}
+.fsm-canvas .react-flow__controls button:hover {
+  background: var(--paper-dark);
+}
+.fsm-canvas .react-flow__attribution {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  opacity: 0.5;
+  background: transparent;
+}
+.fsm-canvas .rf-handle {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
