@@ -4,6 +4,7 @@ import { useOntology } from './store/ontology';
 import { useDiff } from './store/diff';
 import { useScreen } from './store/screen';
 import { useLocalToggle } from './hooks/useLocalToggle';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { SketchyFilters } from './tokens/SketchyFilters';
 import { AppHeader } from './components/AppHeader';
 import { ContextPanel } from './components/ContextPanel';
@@ -17,6 +18,7 @@ export default function App() {
   const loadDiff = useDiff((s) => s.load);
   const [railCollapsed, setRailCollapsed] = useLocalToggle('editor.railCollapsed', false);
   const railPanelRef = useRef<ImperativePanelHandle>(null);
+  useKeyboardShortcuts();
 
   useEffect(() => {
     load();

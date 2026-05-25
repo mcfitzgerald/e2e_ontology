@@ -271,7 +271,7 @@ function FSMInner({ data }: Props) {
             edgeTypes={edgeTypes}
             fitView
             fitViewOptions={{ padding: 0.18 }}
-            minZoom={0.4}
+            minZoom={0.3}
             maxZoom={2}
             panOnDrag
             zoomOnScroll

@@ -4,8 +4,6 @@ A graph-first editor and explainer for the supply-chain ontology. Primary user: 
 
 The editor renders live state from `supply_chain_demo.yaml` via `exploder.load_ontology()` — no data duplication, no drift.
 
-> **Working on this directory?** Read [`AGENTS.md`](AGENTS.md) first. It documents the visual parity gate, stack conventions, and scope guardrails specific to this subtree.
-
 ## Status
 
 Phase 0 scaffolding. Screen 1 (role swimlane graph) is the immediate next milestone.
@@ -17,10 +15,10 @@ Visual spec: [`editor/design_reference/wireframe.html`](design_reference/wirefra
 
 ```
 editor/
-  AGENTS.md                    ← directives for coding agents
   README.md                    ← this file
+  GLOSSARY.md                  ← vocabulary reference for ontology + editor terms
   design_reference/            ← Claude Design mockup, reference-only
-  parity_reviews/              ← per-screen parity memos
+  parity_reviews/              ← historical per-screen parity memos (01–05)
   frontend/                    ← React + Vite + TypeScript SPA
   backend/                     ← FastAPI wrapping exploder.load_ontology()
 ```

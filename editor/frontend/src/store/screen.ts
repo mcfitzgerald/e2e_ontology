@@ -37,8 +37,9 @@ function persist(s: ScreenId) {
  * user back where they were; pair of layout widths (editor.layout.*)
  * already persist on the same principle.
  *
- * Authoring (Screen 3) is intentionally absent: the scope guardrail
- * (editor/AGENTS.md) holds it at mockup-only until other screens prove out.
+ * Authoring (Screen 3) is intentionally absent: the design brief
+ * (reference/ontology_editor_design_brief.md) holds it at mockup-only
+ * until other screens prove out.
  */
 export const useScreen = create<ScreenState>((set) => ({
   current: readInitial(),

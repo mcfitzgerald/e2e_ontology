@@ -7,8 +7,8 @@ import type { SelectionKind } from '../store/ontology';
  * element is in the diff. Mockup lines 325–335 + 1268–1277 + 1349–1355.
  *
  * Mockup uses var(--font-hand) for the caret glyph. We swap that to plain
- * JetBrains Mono per AGENTS.md (no handwritten fonts) — flagged as
- * intentional drift in editor/parity_reviews/03_diff_gutters.md.
+ * JetBrains Mono (no handwritten fonts) — flagged as intentional drift
+ * in editor/parity_reviews/03_diff_gutters.md.
  */
 export function PanelDiff({ selectionKind, name }: { selectionKind: SelectionKind; name: string }) {
   const statusIndex = useDiff((s) => s.statusIndex);

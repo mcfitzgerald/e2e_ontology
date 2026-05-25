@@ -271,8 +271,8 @@
 }
 
 /* ===== Panel diff banner (Phase 3) ===== */
-/* Mockup line 325-335. Caret swapped to JetBrains Mono per AGENTS.md
- * (no handwritten fonts) — flagged in the parity memo. */
+/* Mockup line 325-335. Caret uses JetBrains Mono instead of the mockup's
+ * handwritten font (intentional drift; see parity memo 03). */
 .panel-diff {
   background: #fff6cf;
   border-left: 3px solid var(--diff-change);
