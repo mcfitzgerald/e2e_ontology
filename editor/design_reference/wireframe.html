@@ -1,0 +1,2619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Ontology Editor — Wireframes</title>
+<meta name="viewport" content="width=1400"/>
+<style>
+/* ============================================================
+   Ontology Editor — wireframe aesthetic
+   Hybrid sketchy: hand-drawn strokes, real labels and positions.
+   Monospace for structure, hand-drawn for annotations.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Caveat:wght@500;700&family=Shadows+Into+Light&display=swap');
+
+:root {
+  --paper: #f7f3ea;
+  --paper-dark: #ede7d6;
+  --ink: #1a1a1a;
+  --ink-soft: #3a3a3a;
+  --ink-muted: #6a6359;
+  --rule: #1a1a1a;
+
+  /* Domain tints — low-saturation, warm pastels. Consistent across screens. */
+  --dom-commercial: #fde4d4;
+  --dom-demand: #fceecd;
+  --dom-supply_netops: #e3edd6;
+  --dom-manufacturing: #dce6ef;
+  --dom-logistics: #e9dff1;
+  --dom-procurement: #f3dcd4;
+
+  /* Flow kinds per brief */
+  --flow-material: #5a3b22;     /* earth-tone, heavy */
+  --flow-information: #3b6a96;  /* cool blue, light */
+  --flow-cash: #b78d2a;         /* gold, settlement-final */
+
+  --axiom-blocking: #c04a3a;
+  --axiom-warning: #d49a2a;
+  --axiom-advisory: #8a8070;
+
+  --diff-add: #4b8a4a;
+  --diff-change: #c9a227;
+  --diff-remove: #b24a3a;
+
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-hand: "Caveat", "Shadows Into Light", cursive;
+  --font-sketch: "Shadows Into Light", "Caveat", cursive;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  /* Paper grain texture */
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(154, 132, 94, 0.04) 0, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(154, 132, 94, 0.035) 0, transparent 50%),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 23px,
+      rgba(154, 132, 94, 0.04) 23px,
+      rgba(154, 132, 94, 0.04) 24px
+    );
+}
+
+/* ===== App shell ===== */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 10px 18px;
+  gap: 18px;
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.app-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.app-title .tag {
+  font-family: var(--font-hand);
+  font-size: 22px;
+  color: var(--ink-muted);
+  font-weight: 700;
+  transform: rotate(-2deg);
+  display: inline-block;
+}
+.app-title .ver {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
+.screen-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.screen-tabs button {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: transparent;
+  border: 1.2px solid var(--ink);
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--ink);
+  border-radius: 2px;
+  position: relative;
+}
+.screen-tabs button:hover { background: var(--paper-dark); }
+.screen-tabs button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.screen-tabs button .num {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+.branch-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--paper-dark);
+  border: 1px dashed var(--ink-muted);
+  padding: 3px 8px;
+  border-radius: 3px;
+  color: var(--ink-soft);
+}
+.branch-badge .diff-count { color: var(--diff-change); font-weight: 600; }
+
+/* ===== Screen container ===== */
+
+.screen { display: none; flex: 1; min-height: 0; }
+.screen.active { display: flex; }
+
+/* Three-rail layout: left rail / canvas / right rail */
+.rail {
+  border-right: 1.5px solid var(--ink);
+  padding: 14px 14px;
+  overflow-y: auto;
+  background: var(--paper);
+}
+.rail-right {
+  border-right: none;
+  border-left: 1.5px solid var(--ink);
+}
+.rail h4 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--ink-muted);
+}
+.rail h4:not(:first-child) { margin-top: 18px; }
+
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+/* Sketchy stroke aesthetic via SVG filter */
+.sketchy {
+  filter: url(#roughen);
+}
+
+/* ===== Left rail (variant-dependent) ===== */
+
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1.2px solid var(--ink);
+  border-radius: 3px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  background: var(--paper);
+  transition: background 0.1s;
+  position: relative;
+}
+.filter-chip:hover { background: var(--paper-dark); }
+.filter-chip.on { background: var(--ink); color: var(--paper); }
+.filter-chip .sw {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--ink);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.filter-chip.on .sw { border-color: var(--paper); }
+
+.search-box {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1.2px solid var(--ink);
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 3px;
+  outline: none;
+}
+.search-box:focus { background: #fffaee; }
+.search-box::placeholder { color: var(--ink-muted); font-style: italic; }
+
+.new-dropdown {
+  width: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 3px;
+}
+.new-dropdown:hover { background: #2d2d2d; }
+.new-dropdown .plus { font-family: var(--font-hand); font-size: 18px; }
+
+.palette-item {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  padding: 6px 4px;
+  gap: 6px;
+  font-size: 11px;
+  cursor: grab;
+  border-bottom: 1px dotted var(--ink-muted);
+}
+.palette-item:hover { background: var(--paper-dark); }
+.palette-item .glyph {
+  width: 24px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.palette-item .hint {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+/* ===== Right rail (context panel) ===== */
+
+.breadcrumb {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  margin-bottom: 10px;
+  word-break: break-all;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--ink-muted);
+  line-height: 1.5;
+}
+.breadcrumb a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-muted);
+}
+.breadcrumb a:hover { color: var(--ink); background: var(--paper-dark); }
+.breadcrumb .sep { margin: 0 4px; color: var(--ink-muted); }
+
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.panel-kind {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+  border: 1px solid var(--ink-muted);
+  padding: 2px 6px;
+  border-radius: 2px;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+.panel-name {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+.panel-diff {
+  background: #fff6cf;
+  border-left: 3px solid var(--diff-change);
+  padding: 6px 8px;
+  font-size: 11px;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+}
+.panel-diff .caret { font-family: var(--font-hand); font-size: 14px; }
+.panel-diff ins { text-decoration: none; background: #d6e8d6; }
+.panel-diff del { color: #b24a3a; }
+
+.row {
+  display: grid;
+  grid-template-columns: 85px 1fr;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--paper-dark);
+  font-size: 11.5px;
+  align-items: start;
+}
+.row .k {
+  color: var(--ink-muted);
+  font-weight: 500;
+  font-size: 10.5px;
+  padding-top: 2px;
+  letter-spacing: 0.02em;
+}
+.row .v { color: var(--ink); word-break: break-all; }
+
+.chip {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  margin: 1px 2px 1px 0;
+  text-decoration: none;
+  color: var(--ink);
+  transition: background 0.1s;
+}
+.chip:hover { background: var(--paper-dark); }
+.chip.boundary { border-style: dashed; }
+.chip.entity { background: #efe8d7; }
+.chip.flow { background: #e7efea; }
+.chip.event { background: #f3e7d2; font-style: italic; }
+.chip.fsm { background: #e6e0ef; }
+
+.axiom-list { list-style: none; padding: 0; margin: 0; }
+.axiom-item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 11.5px;
+  border-bottom: 1px dotted var(--paper-dark);
+}
+.axiom-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  margin-top: 4px;
+  border: 1px solid var(--ink);
+}
+.axiom-dot.blocking { background: var(--axiom-blocking); }
+.axiom-dot.warning  { background: var(--axiom-warning); }
+.axiom-dot.advisory { background: var(--axiom-advisory); }
+.axiom-name { font-weight: 600; margin-bottom: 2px; }
+.axiom-nl { color: var(--ink-soft); font-style: italic; font-family: var(--font-hand); font-size: 14px; line-height: 1.35; }
+.axiom-route {
+  margin-top: 4px; font-size: 10.5px; color: var(--axiom-blocking);
+}
+
+.hint-block {
+  margin-top: 14px;
+  padding: 10px;
+  background: #fbf7ea;
+  border: 1px dashed var(--ink-muted);
+  border-radius: 2px;
+  font-family: var(--font-hand);
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.hint-block .hint-lbl {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 4px;
+}
+
+.empty-state {
+  color: var(--ink-muted);
+  font-family: var(--font-hand);
+  font-size: 18px;
+  text-align: center;
+  padding: 40px 20px;
+  line-height: 1.3;
+}
+.empty-state .arrow {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 6px;
+  transform: rotate(-10deg);
+}
+
+/* ===== Canvas / graph ===== */
+
+.canvas-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+  background: var(--paper);
+  padding: 4px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  font-size: 11px;
+}
+.canvas-toolbar button {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--ink-muted);
+  background: var(--paper);
+  padding: 3px 8px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.canvas-toolbar button:hover { background: var(--paper-dark); }
+
+.legend {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(247, 243, 234, 0.95);
+  border: 1.2px solid var(--ink);
+  padding: 8px 10px;
+  font-size: 10.5px;
+  border-radius: 3px;
+  z-index: 10;
+  max-width: 260px;
+}
+.legend h5 {
+  margin: 0 0 4px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.legend-row svg { flex-shrink: 0; }
+
+/* SVG graph styling */
+.graph-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.node-role {
+  cursor: pointer;
+}
+.node-role rect, .node-role .role-box {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.node-role.boundary rect, .node-role.boundary .role-box {
+  stroke-dasharray: 6 3;
+  fill: var(--paper);
+}
+.node-role text { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+.node-role .role-name { font-weight: 600; font-size: 12.5px; }
+.node-role .role-desc { font-size: 10px; fill: var(--ink-muted); }
+.node-role.selected rect, .node-role.selected .role-box {
+  stroke-width: 2.5;
+  fill: #fff6cf;
+}
+.node-role.dimmed { opacity: 0.25; }
+
+.node-role .hitl-badge {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  fill: var(--ink);
+}
+
+.swimlane-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 600;
+  fill: var(--ink-soft);
+}
+.swimlane-label-hand {
+  font-family: var(--font-hand);
+  font-size: 22px;
+  fill: var(--ink-soft);
+  font-weight: 700;
+}
+
+.flow-edge { fill: none; pointer-events: stroke; cursor: pointer; }
+.flow-edge.information { stroke: var(--flow-information); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.flow-edge.material    { stroke: var(--flow-material);    stroke-width: 3.2; }
+.flow-edge.cash        { stroke: var(--flow-cash);        stroke-width: 1.6; }
+.flow-edge.selected    { stroke-width: 3; }
+.flow-edge.dimmed      { opacity: 0.2; }
+
+/* Cash uses doubled line effect via inner+outer */
+.flow-edge-cash-inner { stroke: var(--paper); stroke-width: 0.8; fill: none; }
+
+.flow-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--ink);
+  pointer-events: none;
+}
+.flow-label-hand {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  fill: var(--ink-soft);
+  pointer-events: none;
+}
+.flow-label-bg {
+  fill: var(--paper);
+  stroke: none;
+}
+
+.axiom-badge { cursor: pointer; }
+.axiom-badge circle {
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.axiom-badge text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--paper);
+  font-weight: 700;
+}
+
+.diff-gutter {
+  fill: var(--diff-change);
+  opacity: 0.7;
+}
+.diff-gutter.added  { fill: var(--diff-add); }
+.diff-gutter.removed { fill: var(--diff-remove); }
+
+.fsm-halo {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.fsm-halo-label {
+  font-family: var(--font-hand);
+  font-size: 15px;
+  fill: var(--ink-muted);
+  pointer-events: none;
+}
+
+/* Domain swimlanes */
+.swimlane-rect {
+  stroke: var(--ink-muted);
+  stroke-width: 0.6;
+  stroke-dasharray: 1 3;
+}
+.swimlane-divider {
+  stroke: var(--ink-muted);
+  stroke-width: 0.8;
+  stroke-dasharray: 2 4;
+}
+
+/* ===== Variant selector (tabs within Screen 1) ===== */
+
+.variant-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 0 18px;
+  background: var(--paper);
+}
+.variant-tabs button {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: transparent;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--ink-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  position: relative;
+}
+.variant-tabs button:hover { color: var(--ink); }
+.variant-tabs button.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 600;
+}
+.variant-tabs button .vtag {
+  font-family: var(--font-hand);
+  font-size: 15px;
+  margin-right: 5px;
+  color: var(--diff-change);
+}
+.variant-tabs .variant-note {
+  margin-left: auto;
+  align-self: center;
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--ink-muted);
+  padding: 4px 8px;
+}
+
+/* ===== Cascade view ===== */
+
+.cascade-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 18px;
+  border-bottom: 1px dashed var(--ink-muted);
+  background: var(--paper);
+}
+.cascade-controls label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.cascade-controls select, .cascade-controls .picker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1.2px solid var(--ink);
+  background: var(--paper);
+  padding: 5px 8px;
+  border-radius: 3px;
+}
+
+/* ===== Authoring overlay ===== */
+
+.authoring-rail {
+  width: 360px;
+  background: #fdfaef;
+  border-left: 1.5px solid var(--ink);
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+.authoring-rail h3 {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+.authoring-rail h3 .sketch {
+  font-family: var(--font-hand); font-size: 20px; color: var(--diff-change); margin-right: 6px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+.form-label {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.form-input, .form-select {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1.2px solid var(--ink);
+  background: var(--paper);
+  padding: 6px 8px;
+  border-radius: 3px;
+  outline: none;
+}
+.form-input:focus { background: #fffaee; }
+.form-input.valid { border-color: var(--diff-add); }
+.form-input.error { border-color: var(--axiom-blocking); }
+.form-input .inline-err {
+  font-family: var(--font-hand);
+  color: var(--axiom-blocking);
+  font-size: 13px;
+}
+.form-err {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--axiom-blocking);
+  margin-top: 3px;
+}
+.form-textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.seg {
+  display: flex;
+  border: 1.2px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.seg button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 4px;
+  cursor: pointer;
+  border-right: 1px solid var(--ink-muted);
+}
+.seg button:last-child { border-right: none; }
+.seg button.on { background: var(--ink); color: var(--paper); }
+
+.query-indicator {
+  background: #fff6cf;
+  border: 1px dashed var(--diff-change);
+  padding: 6px 8px;
+  margin: 4px 0;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  border-radius: 3px;
+  display: none;
+}
+.query-indicator.on { display: block; }
+
+.validate-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin: 12px 0;
+  border-radius: 3px;
+  font-size: 11.5px;
+  background: #e0f0e0;
+  border: 1px solid var(--diff-add);
+}
+.validate-status .dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--diff-add);
+}
+.validate-status.error { background: #fbe5e1; border-color: var(--axiom-blocking); }
+.validate-status.error .dot { background: var(--axiom-blocking); }
+.validate-status.pending { background: #fff6cf; border-color: var(--diff-change); }
+.validate-status.pending .dot { background: var(--diff-change); }
+
+.commit-btn {
+  width: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+}
+.commit-btn:disabled { background: var(--ink-muted); cursor: not-allowed; }
+
+/* ===== FSM detail view ===== */
+
+.fsm-state-node rect {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.fsm-state-node.initial rect { stroke-width: 2.5; }
+.fsm-state-node.terminal rect {
+  stroke-width: 1.5;
+  fill: var(--paper-dark);
+}
+.fsm-state-node.terminal .terminator {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.fsm-state-node text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.fsm-transition {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.fsm-transition.guarded { stroke: var(--axiom-blocking); stroke-dasharray: 4 2; }
+
+.fsm-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  fill: var(--ink);
+}
+.fsm-guard-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+.fsm-guard-chip rect {
+  fill: #fdeae7;
+  stroke: var(--axiom-blocking);
+  stroke-width: 1;
+}
+.fsm-guard-chip text { fill: var(--axiom-blocking); font-weight: 600; }
+
+/* ===== Utilities ===== */
+
+.u-mt-0 { margin-top: 0 !important; }
+.u-muted { color: var(--ink-muted); }
+.u-mono { font-family: var(--font-mono); }
+.u-hand { font-family: var(--font-hand); }
+.u-small { font-size: 10.5px; }
+
+/* Right-click menu */
+.ctx-menu {
+  position: absolute;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  padding: 4px;
+  border-radius: 3px;
+  box-shadow: 2px 3px 0 rgba(0,0,0,0.1);
+  font-size: 11.5px;
+  z-index: 100;
+  min-width: 220px;
+  display: none;
+}
+.ctx-menu.open { display: block; }
+.ctx-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 2px;
+}
+.ctx-menu button:hover { background: var(--paper-dark); }
+.ctx-menu hr { border: none; border-top: 1px dotted var(--ink-muted); margin: 4px 2px; }
+
+/* Scrollbar — keep subtle */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--paper-dark);
+  border: 1px solid var(--ink-muted);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: #dcd2b9; }
+
+</style>
+<!-- React + Babel (pinned) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Ontology data (plain JS, populates window.ONTOLOGY) -->
+<script>
+// Ontology data distilled from supply_chain_demo.yaml
+// Names are AUTHENTIC — every identifier traces to an actual class in the source.
+
+window.ONTOLOGY = {
+  domains: [
+    { id: "commercial",     label: "commercial",     tint: "#fde4d4", ink: "#8a4b2e", hand: "~retailers & promos", count: 2 },
+    { id: "demand",         label: "demand",         tint: "#fceecd", ink: "#8a6a1e", hand: "~what will sell",      count: 2 },
+    { id: "supply_netops",  label: "supply_netops",  tint: "#e3edd6", ink: "#4f6b2f", hand: "~the hub",             count: 1 },
+    { id: "manufacturing",  label: "manufacturing",  tint: "#dce6ef", ink: "#2f5068", hand: "~making things",       count: 2 },
+    { id: "logistics",      label: "logistics",      tint: "#e9dff1", ink: "#5a3d78", hand: "~moving things",       count: 1 },
+    { id: "procurement",    label: "procurement",    tint: "#f3dcd4", ink: "#8a4432", hand: "~buying things",       count: 2 },
+  ],
+
+  roles: [
+    { id: "customer_development", domain: "commercial",    boundary: true,  hitl: null,          diff: null },
+    { id: "demand_sensing",       domain: "demand",        boundary: true,  hitl: null,          diff: null },
+    { id: "demand_planning",      domain: "demand",        boundary: false, hitl: null,          diff: null },
+    { id: "supply_planning",      domain: "supply_netops", boundary: false, hitl: "conditional", diff: "changed" },
+    { id: "production_planning",  domain: "manufacturing", boundary: false, hitl: null,          diff: null },
+    { id: "co_manufacturing",     domain: "manufacturing", boundary: true,  hitl: null,          diff: null },
+    { id: "logistics_planning",   domain: "logistics",     boundary: false, hitl: null,          diff: null },
+    { id: "procurement",          domain: "procurement",   boundary: false, hitl: null,          diff: null },
+    { id: "supplier_management",  domain: "procurement",   boundary: false, hitl: null,          diff: null },
+  ],
+
+  // All 15 flows
+  flows: [
+    // --- Ingress from boundaries ---
+    { id: "submit_promo_plan",           kind: "information", src: "customer_development", dst: "demand_planning",    quantum: "TradePromotion",       trig: "promo_plan_aligned",       life: "TradePromotionLifecycle",       axiom: null, returns: null, domain: "commercial", diff: null },
+    { id: "raise_demand_anomaly",        kind: "information", src: "demand_sensing",       dst: "demand_planning",    quantum: "DemandAnomaly",        trig: "demand_anomaly_detected",  life: null,                             axiom: null, returns: null, domain: "demand",     diff: null },
+    // --- Forecast → network ---
+    { id: "submit_supply_request",       kind: "information", src: "demand_planning",      dst: "supply_planning",    quantum: "SupplyRequest",        trig: "forecast_revised",         life: null,                             axiom: null, returns: null, domain: "demand",     diff: null },
+    // --- Network → production (with blocking axiom) ---
+    { id: "request_production",          kind: "information", src: "supply_planning",      dst: "production_planning",quantum: "ProductionRequest",    trig: "production_assigned",      life: "ProductionRequestLifecycle",     axiom: "blocking", returns: null, domain: "supply_netops", diff: "changed" },
+    { id: "re_request_production",       kind: "information", src: "supply_planning",      dst: "production_planning",quantum: "ProductionRequest",    trig: "capacity_resolved",        life: "ProductionRequestLifecycle",     axiom: null, returns: null, domain: "supply_netops", diff: "added"   },
+    // --- Capacity escalation ---
+    { id: "escalate_capacity_conflict",  kind: "information", src: "production_planning",  dst: "supply_planning",    quantum: "CapacityConflict",     trig: "capacity_conflict_detected", life: null,                           axiom: null, returns: null, domain: "manufacturing", diff: null },
+    // --- Cross-domain query flows (Mode 2) ---
+    { id: "check_otif_exposure",         kind: "information", src: "supply_planning",      dst: "logistics_planning", quantum: "OTIFQuery",            trig: null,                        life: null,                             axiom: null, returns: "OTIFExposure",        domain: "logistics",     diff: null },
+    { id: "check_promo_flexibility",     kind: "information", src: "supply_planning",      dst: "customer_development",quantum: "PromoFlexibilityQuery",trig: null,                        life: null,                             axiom: null, returns: "PromoFlexibility",    domain: "commercial",    diff: null },
+    { id: "check_coman_availability",    kind: "information", src: "supply_planning",      dst: "co_manufacturing",   quantum: "ComanAvailabilityQuery",trig: null,                       life: null,                             axiom: null, returns: "ComanAvailability",   domain: "manufacturing", diff: null },
+    // --- Resolution execution ---
+    { id: "shift_to_coman",              kind: "material",    src: "supply_planning",      dst: "co_manufacturing",   quantum: "ProductionRequest",    trig: "capacity_resolved",        life: null,                             axiom: null, returns: null, domain: "manufacturing", diff: null },
+    { id: "request_promo_revision",      kind: "information", src: "supply_planning",      dst: "customer_development",quantum: "TradePromotion",      trig: "capacity_resolved",        life: "TradePromotionLifecycle",        axiom: null, returns: null, domain: "commercial",    diff: null },
+    { id: "plan_fulfillment",            kind: "information", src: "supply_planning",      dst: "logistics_planning", quantum: "SupplyRequest",        trig: "capacity_resolved",        life: null,                             axiom: null, returns: null, domain: "logistics",     diff: null },
+    // --- Procurement chain ---
+    { id: "submit_procurement_request",  kind: "information", src: "supply_planning",      dst: "procurement",        quantum: "ProcurementRequest",   trig: "production_assigned",      life: "RequestLifecycle",               axiom: "blocking", returns: null, domain: "procurement",   diff: null },
+    { id: "replan_on_infeasible_request",kind: "information", src: "procurement",          dst: "supply_planning",    quantum: "ProcurementRequest",   trig: "procurement_infeasible",   life: "RequestLifecycle",               axiom: null, returns: null, domain: "procurement",   diff: null },
+    { id: "submit_po_to_supplier",       kind: "material",    src: "procurement",          dst: "supplier_management",quantum: "PurchaseOrder",        trig: "po_drafted",               life: "PurchaseOrderLifecycle",         axiom: null, returns: null, domain: "procurement",   diff: null },
+  ],
+
+  events: [
+    { id: "promo_plan_aligned",         observed_by: "customer_development", domain: "commercial"    },
+    { id: "demand_anomaly_detected",    observed_by: "demand_planning",      domain: "demand"        },
+    { id: "forecast_revised",           observed_by: "demand_planning",      domain: "demand"        },
+    { id: "production_assigned",        observed_by: "supply_planning",      domain: "supply_netops" },
+    { id: "capacity_conflict_detected", observed_by: "production_planning",  domain: "manufacturing" },
+    { id: "capacity_resolved",          observed_by: "supply_planning",      domain: "supply_netops" },
+    { id: "po_drafted",                 observed_by: "procurement",          domain: "procurement"   },
+    { id: "procurement_infeasible",     observed_by: "procurement",          domain: "procurement"   },
+  ],
+
+  stateMachines: [
+    {
+      id: "ProductionRequestLifecycle",
+      domain: "manufacturing",
+      initial: "requested",
+      terminal: ["completed", "cancelled"],
+      states: ["requested", "assigned", "scheduled", "in_production", "completed", "cancelled"],
+      transitions: [
+        { from: "requested",     to: "assigned",      trigger: "assign",   guard: "line_capacity_not_exceeded" },
+        { from: "assigned",      to: "scheduled",     trigger: "schedule", guard: null },
+        { from: "scheduled",     to: "in_production", trigger: "start",    guard: null },
+        { from: "in_production", to: "completed",     trigger: "finish",   guard: null },
+        { from: "requested",     to: "cancelled",     trigger: "cancel",   guard: null },
+        { from: "assigned",      to: "cancelled",     trigger: "cancel",   guard: null },
+        { from: "scheduled",     to: "cancelled",     trigger: "cancel",   guard: null },
+      ],
+      flowsSharing: ["request_production", "re_request_production"],
+    },
+    {
+      id: "RequestLifecycle",
+      domain: "procurement",
+      initial: "draft",
+      terminal: ["approved", "rejected", "expired"],
+      states: ["draft", "submitted", "approved", "rejected", "expired"],
+      transitions: [
+        { from: "draft",     to: "submitted", trigger: "submit",  guard: null },
+        { from: "submitted", to: "approved",  trigger: "approve", guard: "respect_lead_time" },
+        { from: "submitted", to: "rejected",  trigger: "reject",  guard: null },
+        { from: "submitted", to: "expired",   trigger: "timeout", guard: null },
+      ],
+      flowsSharing: ["submit_procurement_request", "replan_on_infeasible_request"],
+    },
+    {
+      id: "PurchaseOrderLifecycle",
+      domain: "procurement",
+      initial: "draft",
+      terminal: ["fulfilled", "cancelled"],
+      states: ["draft", "transmitted", "acknowledged", "fulfilled", "cancelled"],
+      transitions: [
+        { from: "draft",        to: "transmitted",  trigger: "transmit",       guard: null },
+        { from: "transmitted",  to: "acknowledged", trigger: "acknowledge",    guard: null },
+        { from: "acknowledged", to: "fulfilled",    trigger: "goods_received", guard: null },
+        { from: "draft",        to: "cancelled",    trigger: "cancel",         guard: null },
+        { from: "transmitted",  to: "cancelled",    trigger: "cancel",         guard: null },
+      ],
+      flowsSharing: ["submit_po_to_supplier"],
+    },
+    {
+      id: "TradePromotionLifecycle",
+      domain: "commercial",
+      initial: "proposed",
+      terminal: ["completed", "cancelled"],
+      states: ["proposed", "aligned", "committed", "executing", "completed", "revised", "cancelled"],
+      transitions: [
+        { from: "proposed",  to: "aligned",   trigger: "sop_align",   guard: null },
+        { from: "aligned",   to: "committed", trigger: "commit",      guard: null },
+        { from: "committed", to: "executing", trigger: "launch",      guard: null },
+        { from: "executing", to: "completed", trigger: "end",         guard: null },
+        { from: "aligned",   to: "revised",   trigger: "renegotiate", guard: null },
+        { from: "committed", to: "revised",   trigger: "renegotiate", guard: null },
+        { from: "revised",   to: "aligned",   trigger: "re_align",    guard: null },
+      ],
+      flowsSharing: ["submit_promo_plan", "request_promo_revision"],
+    },
+  ],
+
+  axioms: [
+    {
+      name: "line_capacity_not_exceeded",
+      scope: "flow",
+      severity: "blocking",
+      nl: "Total scheduled production on the assigned line for the requested window must not exceed the line's rated weekly capacity.",
+      on_failure_route_to: "escalate_capacity_conflict",
+      onFlow: "request_production",
+    },
+    {
+      name: "respect_lead_time",
+      scope: "flow",
+      severity: "blocking",
+      nl: "A procurement request's required-by date must not fall inside its supplier's lead time.",
+      on_failure_route_to: "replan_on_infeasible_request",
+      onFlow: "submit_procurement_request",
+    },
+  ],
+
+  entities: [
+    "ProcurementRequest", "Supplier", "SKU", "PurchaseOrder",
+    "TradePromotion", "ProductionLine", "RetailerCommitment",
+    "SupplyRequest", "ProductionRequest", "CapacityConflict",
+    "OTIFExposure", "OTIFQuery", "PromoFlexibilityQuery", "PromoFlexibility",
+    "ComanAvailabilityQuery", "ComanAvailability", "DemandAnomaly",
+  ],
+
+  // Short descriptions from the YAML for the context panel
+  descriptions: {
+    customer_development: "Boundary role. Commercial/customer development negotiates trade promotions with retailers. External to the supply chain; the ontology does not model its internals.",
+    demand_sensing: "Boundary role for external demand-anomaly detection — POS streams, retailer EDI, social listening, competitor signals. Source of DemandAnomaly quanta.",
+    demand_planning: "Forecasts demand, detects anomalies, revises plans. Emits SupplyRequest to supply_planning rather than driving procurement directly.",
+    supply_planning: "Network-level planner. Mediates demand ↔ execution, assigns production, hub for cross-domain conflict resolution. human_involvement: conditional.",
+    production_planning: "Owns plant line schedules. Reads ProductionRequest.assigned_line against rated capacity. Escalates capacity_conflict instead of resolving locally.",
+    co_manufacturing: "Boundary role. External contract manufacturer qualified to produce specific SKUs on demand. Outside the orchestration envelope.",
+    logistics_planning: "Warehousing, transport, OTIF compliance. Quantifies penalty exposure for at-risk retailer commitments.",
+    procurement: "Sources materials, drafts purchase orders. Enforces respect_lead_time on submit_procurement_request; escalates back via replan_on_infeasible_request on block.",
+    supplier_management: "Enterprise-side interface that transmits POs to external suppliers and tracks their lifecycle. NOT the supplier itself.",
+
+    submit_promo_plan: "Handoff carrying an aligned TradePromotion across the supply chain boundary into demand_planning.",
+    raise_demand_anomaly: "Ingress flow for demand anomalies. Boundary → demand_planning with DemandAnomaly.",
+    submit_supply_request: "Topology hinge. All fulfillment decisions now flow through supply/netops via this SupplyRequest.",
+    request_production: "Handoff from supply_planning to production_planning carrying a ProductionRequest. Blocking capacity axiom routes failure to escalate_capacity_conflict.",
+    re_request_production: "Internal-resolution re-entry. Fires on capacity_resolved when supply_planning keeps production internal.",
+    escalate_capacity_conflict: "Escalation back to supply_planning with a CapacityConflict quantum — entry point into cross-domain context assembly.",
+    check_otif_exposure: "Query flow. supply_planning asks logistics_planning for penalty exposure; returns an OTIFExposure.",
+    check_promo_flexibility: "Query flow. supply_planning asks customer_development whether a promo can be shifted/reduced; returns a PromoFlexibility.",
+    check_coman_availability: "Query flow. supply_planning asks co_manufacturing about qualification, capacity, and premium cost; returns ComanAvailability.",
+    shift_to_coman: "Material handoff. Routes production to the co-man after capacity_resolved.",
+    request_promo_revision: "Resolution handoff. Asks customer_development to revise the TradePromotion.",
+    plan_fulfillment: "Handoff to logistics_planning to update the distribution plan after resolution.",
+    submit_procurement_request: "Handoff from supply_planning to procurement. Blocking respect_lead_time axiom routes failure to replan_on_infeasible_request.",
+    replan_on_infeasible_request: "Recovery flow back to supply_planning when procurement cannot satisfy the request as drafted.",
+    submit_po_to_supplier: "Material-equivalent PO transmission. Procurement hands a drafted PurchaseOrder to supplier_management.",
+
+    promo_plan_aligned: "S&OP boundary event. Triggers submit_promo_plan.",
+    demand_anomaly_detected: "Statistically significant departure from forecast for a SKU.",
+    forecast_revised: "Demand_planning has updated the forecast. Triggers submit_supply_request.",
+    production_assigned: "Supply planning has assigned production to a specific plant/line. Triggers request_production and submit_procurement_request.",
+    capacity_conflict_detected: "Line capacity conflict detected. Triggers escalate_capacity_conflict.",
+    capacity_resolved: "Supply_planning completed cross-domain context assembly and chose a resolution path.",
+    po_drafted: "Procurement has drafted a PurchaseOrder ready to transmit. Triggers submit_po_to_supplier.",
+    procurement_infeasible: "Blocking axiom on submit_procurement_request fired. Triggers replan_on_infeasible_request.",
+  },
+};
+
+</script>
+</head>
+<body>
+
+<div id="root"></div>
+
+<!-- Component scripts inlined -->
+
+<script type="text/babel" data-presets="react">
+// === shared.jsx ===
+// Shared helpers + context panel + SVG graph pieces
+// Exports components to window so other babel scripts can use them.
+
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+const ONT = window.ONTOLOGY;
+const byId = (list, id) => list.find(x => x.id === id);
+const roleById = (id) => byId(ONT.roles, id);
+const flowById = (id) => byId(ONT.flows, id);
+const eventById = (id) => byId(ONT.events, id);
+const fsmById = (id) => ONT.stateMachines.find(x => x.id === id);
+const axiomByName = (n) => ONT.axioms.find(x => x.name === n);
+const domainById = (id) => byId(ONT.domains, id);
+
+// ============================================================
+// Sketchy SVG filter — applied to graph elements via class .sketchy
+// ============================================================
+function SketchyFilters() {
+  return (
+    <svg width="0" height="0" style={{position: 'absolute'}} aria-hidden="true">
+      <defs>
+        <filter id="roughen" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.4"/>
+        </filter>
+        <filter id="roughen-soft" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="5" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.8"/>
+        </filter>
+        <marker id="arrow-information" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#3b6a96"/>
+        </marker>
+        <marker id="arrow-material" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L12,6 L0,12 z" fill="#5a3b22"/>
+        </marker>
+        <marker id="arrow-cash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#b78d2a"/>
+        </marker>
+        <marker id="arrow-ink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/>
+        </marker>
+      </defs>
+    </svg>
+  );
+}
+window.SketchyFilters = SketchyFilters;
+
+// ============================================================
+// Flow-kind glyph (for legends/chips)
+// ============================================================
+function FlowGlyph({ kind, width = 40, returns, axiomSev }) {
+  return (
+    <svg width={width} height={14} viewBox={`0 0 ${width} 14`}>
+      {kind === 'information' && (
+        <line x1="2" y1="7" x2={width - 6} y2="7" stroke="#3b6a96" strokeWidth="1.4" strokeDasharray="5 3" markerEnd="url(#arrow-information)"/>
+      )}
+      {kind === 'material' && (
+        <line x1="2" y1="7" x2={width - 6} y2="7" stroke="#5a3b22" strokeWidth="3.2" markerEnd="url(#arrow-material)"/>
+      )}
+      {kind === 'cash' && (
+        <g>
+          <line x1="2" y1="5" x2={width - 6} y2="5" stroke="#b78d2a" strokeWidth="1.4"/>
+          <line x1="2" y1="9" x2={width - 6} y2="9" stroke="#b78d2a" strokeWidth="1.4" markerEnd="url(#arrow-cash)"/>
+        </g>
+      )}
+      {returns && (
+        <path d={`M${width - 12} 3 q-3 -3 -6 0`} fill="none" stroke={kind === 'information' ? '#3b6a96' : '#1a1a1a'} strokeWidth="1"/>
+      )}
+      {axiomSev && (
+        <circle cx={width / 2} cy="7" r="2.5" fill={axiomSev === 'blocking' ? '#c04a3a' : axiomSev === 'warning' ? '#d49a2a' : '#8a8070'} stroke="#1a1a1a" strokeWidth="0.6"/>
+      )}
+    </svg>
+  );
+}
+window.FlowGlyph = FlowGlyph;
+
+// ============================================================
+// Role chip w/ HITL indicator
+// ============================================================
+function HitlBadge({ hitl }) {
+  if (!hitl) return null;
+  const glyph = hitl === 'required' ? '👤' : hitl === 'conditional' ? '◐' : '';
+  // Draw via SVG for crisp wireframe feel
+  return (
+    <g>
+      <circle r="7" fill="#fff6cf" stroke="#1a1a1a" strokeWidth="1"/>
+      <text y="3.5" textAnchor="middle" fontFamily="Caveat" fontSize="11" fontWeight="700">
+        {hitl === 'required' ? '!' : '?'}
+      </text>
+    </g>
+  );
+}
+window.HitlBadge = HitlBadge;
+
+// ============================================================
+// Cross-ref chip — clicking navigates
+// ============================================================
+function Chip({ kind, label, onClick, boundary }) {
+  const cls = `chip ${kind || ''} ${boundary ? 'boundary' : ''}`;
+  return (
+    <a className={cls.trim()} onClick={(e) => { e.preventDefault(); onClick && onClick(); }}>{label}</a>
+  );
+}
+window.Chip = Chip;
+
+// ============================================================
+// Context panel (right rail) — renders whatever is selected
+// ============================================================
+function ContextPanel({ selection, breadcrumb, onNavigate, onBack }) {
+  if (!selection) {
+    return (
+      <div>
+        <div className="empty-state">
+          <span className="arrow">↖</span>
+          Click any node, edge, or chip to inspect it.
+          <br/><br/>
+          <span style={{fontSize: 14, color: 'var(--ink-muted)'}}>
+            Cross-references are clickable.<br/>
+            Navigation extends the breadcrumb above.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  const { kind, id } = selection;
+  if (kind === 'role')  return <RolePanel id={id} breadcrumb={breadcrumb} onNavigate={onNavigate} onBack={onBack} />;
+  if (kind === 'flow')  return <FlowPanel id={id} breadcrumb={breadcrumb} onNavigate={onNavigate} onBack={onBack} />;
+  if (kind === 'event') return <EventPanel id={id} breadcrumb={breadcrumb} onNavigate={onNavigate} onBack={onBack} />;
+  if (kind === 'fsm')   return <FSMPanel id={id} breadcrumb={breadcrumb} onNavigate={onNavigate} onBack={onBack} />;
+  if (kind === 'entity')return <EntityPanel id={id} breadcrumb={breadcrumb} onNavigate={onNavigate} onBack={onBack} />;
+  if (kind === 'axiom') return <AxiomPanel name={id} breadcrumb={breadcrumb} onNavigate={onNavigate} onBack={onBack} />;
+  return null;
+}
+window.ContextPanel = ContextPanel;
+
+function Breadcrumb({ trail, onNavigate }) {
+  if (!trail || trail.length === 0) return null;
+  return (
+    <div className="breadcrumb">
+      {trail.map((t, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <span className="sep">→</span>}
+          <a onClick={() => onNavigate && onNavigate(t)}>{t.label || t.id}</a>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+window.Breadcrumb = Breadcrumb;
+
+function RolePanel({ id, breadcrumb, onNavigate }) {
+  const role = roleById(id);
+  if (!role) return null;
+  const dom = domainById(role.domain);
+  const outgoing = ONT.flows.filter(f => f.src === id);
+  const incoming = ONT.flows.filter(f => f.dst === id);
+  const observes = ONT.events.filter(e => e.observed_by === id);
+
+  return (
+    <div>
+      <Breadcrumb trail={breadcrumb} onNavigate={onNavigate} />
+      {role.diff === 'changed' && (
+        <div className="panel-diff">
+          <span className="caret">✎</span> 1 field modified since HEAD
+          <div style={{marginTop: 4, fontFamily: 'var(--font-mono)', fontSize: 10.5}}>
+            <div>human_involvement:</div>
+            <div><del>autonomous</del> → <ins>conditional</ins></div>
+          </div>
+        </div>
+      )}
+      <div className="panel-header">
+        <span className="panel-kind">{role.boundary ? 'boundary role' : 'role'}</span>
+      </div>
+      <div className="panel-name">{role.id}</div>
+      <div style={{margin: '10px 0'}}>
+        <div className="row">
+          <span className="k">domain</span>
+          <span className="v"><span style={{background: dom.tint, padding: '1px 6px', border: `1px solid ${dom.ink}`, borderRadius: 2}}>{role.domain}</span></span>
+        </div>
+        {role.boundary && (
+          <div className="row"><span className="k">is_boundary</span><span className="v">true  <span className="u-hand u-muted" style={{fontSize: 14}}>— external to SC</span></span></div>
+        )}
+        {role.hitl && (
+          <div className="row"><span className="k">human_involve.</span><span className="v">{role.hitl}</span></div>
+        )}
+      </div>
+
+      <div style={{marginTop: 10}}>
+        <div className="row"><span className="k">description</span><span className="v">{ONT.descriptions[id]}</span></div>
+      </div>
+
+      {outgoing.length > 0 && (
+        <div style={{marginTop: 14}}>
+          <h4 className="u-mt-0">outgoing flows ({outgoing.length})</h4>
+          {outgoing.map(f => (
+            <div key={f.id} style={{padding: '4px 0'}}>
+              <Chip kind="flow" label={f.id} onClick={() => onNavigate({kind: 'flow', id: f.id, label: f.id})}/>
+              <span className="u-small u-muted" style={{marginLeft: 6}}>→ {f.dst}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {incoming.length > 0 && (
+        <div style={{marginTop: 14}}>
+          <h4>incoming flows ({incoming.length})</h4>
+          {incoming.map(f => (
+            <div key={f.id} style={{padding: '4px 0'}}>
+              <Chip kind="flow" label={f.id} onClick={() => onNavigate({kind: 'flow', id: f.id, label: f.id})}/>
+              <span className="u-small u-muted" style={{marginLeft: 6}}>← {f.src}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {observes.length > 0 && (
+        <div style={{marginTop: 14}}>
+          <h4>observes events</h4>
+          {observes.map(e => (
+            <Chip key={e.id} kind="event" label={e.id} onClick={() => onNavigate({kind: 'event', id: e.id, label: e.id})}/>
+          ))}
+        </div>
+      )}
+
+      <div className="hint-block">
+        <span className="hint-lbl">llm_prompt_hint</span>
+        {ONT.descriptions[id]}
+      </div>
+    </div>
+  );
+}
+
+function FlowPanel({ id, breadcrumb, onNavigate }) {
+  const flow = flowById(id);
+  if (!flow) return null;
+  const src = roleById(flow.src);
+  const dst = roleById(flow.dst);
+  const ev = flow.trig ? eventById(flow.trig) : null;
+  const fsm = flow.life ? fsmById(flow.life) : null;
+  const ax = flow.axiom ? ONT.axioms.find(a => a.onFlow === id) : null;
+
+  return (
+    <div>
+      <Breadcrumb trail={breadcrumb} onNavigate={onNavigate} />
+      {flow.diff && (
+        <div className="panel-diff" style={{borderLeftColor: flow.diff === 'added' ? 'var(--diff-add)' : 'var(--diff-change)'}}>
+          <span className="caret">{flow.diff === 'added' ? '+' : '✎'}</span>
+          {flow.diff === 'added' ? ' added since HEAD' : ' 2 fields modified since HEAD'}
+        </div>
+      )}
+      <div className="panel-header">
+        <span className="panel-kind">{flow.kind} flow{flow.returns ? ' · query' : ''}</span>
+        <FlowGlyph kind={flow.kind} width={36} returns={flow.returns} axiomSev={flow.axiom}/>
+      </div>
+      <div className="panel-name">{flow.id}</div>
+
+      <div style={{marginTop: 10}}>
+        <div className="row"><span className="k">source_role</span><span className="v">
+          <Chip kind="role" label={flow.src} boundary={src?.boundary} onClick={() => onNavigate({kind: 'role', id: flow.src, label: flow.src})}/>
+        </span></div>
+        <div className="row"><span className="k">target_role</span><span className="v">
+          <Chip kind="role" label={flow.dst} boundary={dst?.boundary} onClick={() => onNavigate({kind: 'role', id: flow.dst, label: flow.dst})}/>
+        </span></div>
+        <div className="row"><span className="k">quantum</span><span className="v">
+          <Chip kind="entity" label={flow.quantum} onClick={() => onNavigate({kind: 'entity', id: flow.quantum, label: flow.quantum})}/>
+        </span></div>
+        {flow.trig && (
+          <div className="row"><span className="k">trigger_event</span><span className="v">
+            <Chip kind="event" label={flow.trig} onClick={() => onNavigate({kind: 'event', id: flow.trig, label: flow.trig})}/>
+          </span></div>
+        )}
+        {flow.life && (
+          <div className="row"><span className="k">lifecycle_ref</span><span className="v">
+            <Chip kind="fsm" label={flow.life} onClick={() => onNavigate({kind: 'fsm', id: flow.life, label: flow.life})}/>
+          </span></div>
+        )}
+        {flow.returns && (
+          <div className="row"><span className="k">returns</span><span className="v">
+            <Chip kind="entity" label={flow.returns} onClick={() => onNavigate({kind: 'entity', id: flow.returns, label: flow.returns})}/>
+            <span className="u-hand u-muted" style={{marginLeft: 6, fontSize: 14}}>— query flow</span>
+          </span></div>
+        )}
+      </div>
+
+      {ax && (
+        <div style={{marginTop: 16}}>
+          <h4>axioms</h4>
+          <ul className="axiom-list">
+            <li className="axiom-item">
+              <span className={`axiom-dot ${ax.severity}`}></span>
+              <div>
+                <div className="axiom-name">
+                  <Chip kind="" label={ax.name} onClick={() => onNavigate({kind: 'axiom', id: ax.name, label: ax.name})}/>
+                  <span className="u-muted u-small" style={{marginLeft: 6}}>{ax.severity}</span>
+                </div>
+                <div className="axiom-nl">{ax.nl}</div>
+                {ax.on_failure_route_to && (
+                  <div className="axiom-route">
+                    ↳ on failure route to <Chip kind="flow" label={ax.on_failure_route_to} onClick={() => onNavigate({kind: 'flow', id: ax.on_failure_route_to, label: ax.on_failure_route_to})}/>
+                  </div>
+                )}
+              </div>
+            </li>
+          </ul>
+        </div>
+      )}
+
+      <div className="hint-block">
+        <span className="hint-lbl">llm_prompt_hint</span>
+        {ONT.descriptions[id]}
+      </div>
+    </div>
+  );
+}
+
+function EventPanel({ id, breadcrumb, onNavigate }) {
+  const ev = eventById(id);
+  if (!ev) return null;
+  const triggeredFlows = ONT.flows.filter(f => f.trig === id);
+  return (
+    <div>
+      <Breadcrumb trail={breadcrumb} onNavigate={onNavigate} />
+      <div className="panel-header"><span className="panel-kind">event</span></div>
+      <div className="panel-name">{ev.id}</div>
+      <div style={{marginTop: 10}}>
+        <div className="row"><span className="k">observed_by</span><span className="v">
+          <Chip kind="role" label={ev.observed_by} onClick={() => onNavigate({kind: 'role', id: ev.observed_by, label: ev.observed_by})}/>
+        </span></div>
+        <div className="row"><span className="k">domain</span><span className="v">{ev.domain}</span></div>
+        <div className="row"><span className="k">description</span><span className="v">{ONT.descriptions[id]}</span></div>
+      </div>
+      {triggeredFlows.length > 0 && (
+        <div style={{marginTop: 14}}>
+          <h4>triggers flows</h4>
+          {triggeredFlows.map(f => (
+            <div key={f.id} style={{padding: '3px 0'}}>
+              <Chip kind="flow" label={f.id} onClick={() => onNavigate({kind: 'flow', id: f.id, label: f.id})}/>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FSMPanel({ id, breadcrumb, onNavigate }) {
+  const fsm = fsmById(id);
+  if (!fsm) return null;
+  return (
+    <div>
+      <Breadcrumb trail={breadcrumb} onNavigate={onNavigate} />
+      <div className="panel-header"><span className="panel-kind">state machine</span></div>
+      <div className="panel-name">{fsm.id}</div>
+      <div style={{marginTop: 10}}>
+        <div className="row"><span className="k">initial</span><span className="v">{fsm.initial}</span></div>
+        <div className="row"><span className="k">terminal</span><span className="v">{fsm.terminal.join(', ')}</span></div>
+        <div className="row"><span className="k">states ({fsm.states.length})</span>
+          <span className="v">{fsm.states.map(s => <Chip key={s} label={s} onClick={() => {}}/>)}</span>
+        </div>
+      </div>
+      <h4 style={{marginTop: 14}}>flows sharing this lifecycle ({fsm.flowsSharing.length})</h4>
+      {fsm.flowsSharing.map(fid => (
+        <div key={fid} style={{padding: '3px 0'}}>
+          <Chip kind="flow" label={fid} onClick={() => onNavigate({kind: 'flow', id: fid, label: fid})}/>
+        </div>
+      ))}
+      <button
+        className="commit-btn"
+        style={{marginTop: 16}}
+        onClick={() => onNavigate({kind: 'fsmdetail', id: fsm.id, label: fsm.id + ' detail'})}
+      >open FSM detail →</button>
+    </div>
+  );
+}
+
+function EntityPanel({ id, breadcrumb, onNavigate }) {
+  // Entities aren't fully modeled — just show references.
+  const asQuantum = ONT.flows.filter(f => f.quantum === id);
+  const asReturns = ONT.flows.filter(f => f.returns === id);
+  return (
+    <div>
+      <Breadcrumb trail={breadcrumb} onNavigate={onNavigate} />
+      <div className="panel-header"><span className="panel-kind">plain entity</span></div>
+      <div className="panel-name">{id}</div>
+      <div className="u-hand u-muted" style={{fontSize: 15, marginTop: 6}}>
+        no <code>instantiates:</code> tag — standard typed slots
+      </div>
+      {asQuantum.length > 0 && (
+        <div style={{marginTop: 14}}>
+          <h4>carried as quantum by</h4>
+          {asQuantum.map(f => <div key={f.id} style={{padding: '3px 0'}}>
+            <Chip kind="flow" label={f.id} onClick={() => onNavigate({kind: 'flow', id: f.id, label: f.id})}/>
+          </div>)}
+        </div>
+      )}
+      {asReturns.length > 0 && (
+        <div style={{marginTop: 14}}>
+          <h4>returned by</h4>
+          {asReturns.map(f => <div key={f.id} style={{padding: '3px 0'}}>
+            <Chip kind="flow" label={f.id} onClick={() => onNavigate({kind: 'flow', id: f.id, label: f.id})}/>
+          </div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AxiomPanel({ name, breadcrumb, onNavigate }) {
+  const ax = axiomByName(name);
+  if (!ax) return null;
+  return (
+    <div>
+      <Breadcrumb trail={breadcrumb} onNavigate={onNavigate} />
+      <div className="panel-header">
+        <span className="panel-kind">axiom · {ax.severity}</span>
+        <span className={`axiom-dot ${ax.severity}`} style={{marginTop: 4}}></span>
+      </div>
+      <div className="panel-name">{ax.name}</div>
+      <div className="hint-block" style={{marginTop: 10}}>
+        <span className="hint-lbl">nl (authoritative)</span>
+        {ax.nl}
+      </div>
+      <div style={{marginTop: 14}}>
+        <div className="row"><span className="k">scope</span><span className="v">{ax.scope}</span></div>
+        <div className="row"><span className="k">severity</span><span className="v">{ax.severity}</span></div>
+        <div className="row"><span className="k">on flow</span><span className="v">
+          <Chip kind="flow" label={ax.onFlow} onClick={() => onNavigate({kind: 'flow', id: ax.onFlow, label: ax.onFlow})}/>
+        </span></div>
+        {ax.on_failure_route_to && (
+          <div className="row"><span className="k">route on fail</span><span className="v">
+            <Chip kind="flow" label={ax.on_failure_route_to} onClick={() => onNavigate({kind: 'flow', id: ax.on_failure_route_to, label: ax.on_failure_route_to})}/>
+          </span></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Legend — shared across structure views
+// ============================================================
+function Legend() {
+  return (
+    <div className="legend">
+      <h5>flow kinds</h5>
+      <div className="legend-row"><FlowGlyph kind="information"/> <span>information (dashed, cool)</span></div>
+      <div className="legend-row"><FlowGlyph kind="material"/> <span>material (thick, earth)</span></div>
+      <div className="legend-row"><FlowGlyph kind="cash"/> <span>cash (doubled, gold)</span></div>
+      <div className="legend-row"><FlowGlyph kind="information" returns="y"/> <span>+ returns = query flow</span></div>
+      <h5 style={{marginTop: 8}}>axioms</h5>
+      <div className="legend-row">
+        <svg width="14" height="14"><circle cx="7" cy="7" r="4" fill="#c04a3a" stroke="#1a1a1a"/></svg>
+        <span>blocking</span>
+        <svg width="14" height="14" style={{marginLeft: 4}}><circle cx="7" cy="7" r="4" fill="#d49a2a" stroke="#1a1a1a"/></svg>
+        <span>warning</span>
+      </div>
+      <h5 style={{marginTop: 8}}>role</h5>
+      <div className="legend-row">
+        <svg width="18" height="14"><rect x="1" y="1" width="16" height="12" fill="#f7f3ea" stroke="#1a1a1a" strokeWidth="1.5"/></svg>
+        <span>enterprise</span>
+        <svg width="18" height="14" style={{marginLeft: 4}}><rect x="1" y="1" width="16" height="12" fill="#f7f3ea" stroke="#1a1a1a" strokeWidth="1.5" strokeDasharray="3 2"/></svg>
+        <span>boundary (dashed)</span>
+      </div>
+    </div>
+  );
+}
+window.Legend = Legend;
+
+// export helpers
+Object.assign(window, {
+  byId, roleById, flowById, eventById, fsmById, axiomByName, domainById,
+  Chip, Breadcrumb, FlowGlyph, HitlBadge,
+});
+
+</script>
+<script type="text/babel" data-presets="react">
+// === structure.jsx ===
+// Screen 1 — Structure view with 3 variants
+
+const { useState: useStateS, useMemo: useMemoS } = React;
+
+// VARIANT A — role graph with swimlanes
+function RoleGraph({ filters, selection, onSelect }) {
+  const W = 1100, H = 640;
+  const LANE_Y = {
+    commercial:    [40,  120],
+    demand:        [130, 210],
+    supply_netops: [220, 300],
+    manufacturing: [310, 400],
+    logistics:     [410, 490],
+    procurement:   [500, 620],
+  };
+
+  const rolePos = {
+    customer_development: { x: 150,  y: 80 },
+    demand_sensing:       { x: 150,  y: 170 },
+    demand_planning:      { x: 450,  y: 170 },
+    supply_planning:      { x: 560,  y: 260 },
+    production_planning:  { x: 250,  y: 350 },
+    co_manufacturing:     { x: 800,  y: 350 },
+    logistics_planning:   { x: 850,  y: 450 },
+    procurement:          { x: 250,  y: 540 },
+    supplier_management:  { x: 620,  y: 580 },
+  };
+
+  const visibleRoleIds = new Set(ONT.roles.filter(r => {
+    if (filters.domains.size > 0 && !filters.domains.has(r.domain)) return false;
+    if (filters.boundaryOnly && !r.boundary) return false;
+    return true;
+  }).map(r => r.id));
+
+  const visibleFlows = ONT.flows.filter(f => {
+    if (!filters.flowKinds.has(f.kind)) return false;
+    if (!visibleRoleIds.has(f.src) || !visibleRoleIds.has(f.dst)) return false;
+    if (filters.axiomsOnly && !f.axiom) return false;
+    if (filters.query) {
+      const q = filters.query.toLowerCase();
+      if (!f.id.toLowerCase().includes(q) && !f.src.toLowerCase().includes(q) && !f.dst.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const highlighted = new Set();
+  if (selection) {
+    if (selection.kind === 'role') highlighted.add(selection.id);
+    if (selection.kind === 'flow') {
+      const f = flowById(selection.id);
+      if (f) { highlighted.add(f.src); highlighted.add(f.dst); }
+    }
+  }
+
+  // bundle parallel edges between same pair with small offsets
+  const edgeKey = (f) => `${f.src}::${f.dst}`;
+  const byPair = {};
+  visibleFlows.forEach(f => { (byPair[edgeKey(f)] = byPair[edgeKey(f)] || []).push(f); });
+
+  const edgePath = (f, idx, total) => {
+    const a = rolePos[f.src], b = rolePos[f.dst];
+    if (!a || !b) return '';
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const offset = total > 1 ? (idx - (total - 1) / 2) * 24 : 0;
+    // perpendicular offset for parallel edges
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const nx = -dy/len, ny = dx/len;
+    const cx = mx + nx * (40 + offset);
+    const cy = my + ny * (40 + offset);
+    return `M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}`;
+  };
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="graph-svg" preserveAspectRatio="xMidYMid meet">
+      {/* Swimlanes */}
+      {ONT.domains.map(d => {
+        const [y0, y1] = LANE_Y[d.id];
+        const dim = filters.domains.size > 0 && !filters.domains.has(d.id);
+        return (
+          <g key={d.id} opacity={dim ? 0.25 : 1}>
+            <rect x="0" y={y0} width={W} height={y1 - y0} fill={d.tint} className="swimlane-rect"/>
+            <text x="12" y={y0 + 16} className="swimlane-label">{d.id.toUpperCase()}</text>
+            <text x={W - 12} y={y0 + 22} textAnchor="end" className="swimlane-label-hand">{d.hand}</text>
+            <line x1="0" y1={y1} x2={W} y2={y1} className="swimlane-divider"/>
+          </g>
+        );
+      })}
+
+      {/* Edges */}
+      <g className="sketchy">
+        {Object.values(byPair).flatMap(bundle => bundle.map((f, idx) => {
+          const isSel = selection && selection.kind === 'flow' && selection.id === f.id;
+          const dim = selection && !isSel && !highlighted.has(f.src) && !highlighted.has(f.dst);
+          const cls = `flow-edge ${f.kind} ${isSel ? 'selected' : ''} ${dim ? 'dimmed' : ''}`;
+          return (
+            <g key={f.id}>
+              <path d={edgePath(f, idx, bundle.length)} className={cls} markerEnd={`url(#arrow-${f.kind})`}
+                onClick={(e) => { e.stopPropagation(); onSelect({kind: 'flow', id: f.id, label: f.id}); }}/>
+              {f.axiom && (() => {
+                const a = rolePos[f.src], b = rolePos[f.dst];
+                const lx = (a.x + b.x) / 2, ly = (a.y + b.y) / 2;
+                const color = f.axiom === 'blocking' ? '#c04a3a' : '#d49a2a';
+                return (
+                  <g className="axiom-badge" transform={`translate(${lx}, ${ly})`}
+                    onClick={(e) => { e.stopPropagation(); const ax = ONT.axioms.find(x => x.onFlow === f.id); if (ax) onSelect({kind: 'axiom', id: ax.name, label: ax.name}); }}>
+                    <circle r="8" fill={color}/>
+                    <text textAnchor="middle" y="3">!</text>
+                  </g>
+                );
+              })()}
+            </g>
+          );
+        }))}
+      </g>
+
+      {/* Role nodes */}
+      <g>
+        {ONT.roles.filter(r => visibleRoleIds.has(r.id)).map(r => {
+          const p = rolePos[r.id];
+          if (!p) return null;
+          const isSel = selection && selection.kind === 'role' && selection.id === r.id;
+          const dim = selection && !isSel && !highlighted.has(r.id);
+          return (
+            <g key={r.id} transform={`translate(${p.x}, ${p.y})`}
+              className={`node-role ${r.boundary ? 'boundary' : ''} ${isSel ? 'selected' : ''} ${dim ? 'dimmed' : ''}`}
+              onClick={(e) => { e.stopPropagation(); onSelect({kind: 'role', id: r.id, label: r.id}); }}>
+              <rect x="-85" y="-18" width="170" height="36" rx="2"/>
+              <text className="role-name" textAnchor="middle" y="4">{r.id}</text>
+              {r.hitl && (
+                <g transform="translate(78, -12)">
+                  <circle r="8" fill="#fff6cf" stroke="#1a1a1a" strokeWidth="1"/>
+                  <text textAnchor="middle" y="4" fontFamily="Caveat" fontSize="14" fontWeight="700">{r.hitl === 'required' ? '!' : '?'}</text>
+                </g>
+              )}
+              {r.diff === 'changed' && <rect x="-85" y="-18" width="3" height="36" className="diff-gutter"/>}
+              {r.diff === 'added' && <rect x="-85" y="-18" width="3" height="36" className="diff-gutter added"/>}
+            </g>
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
+// VARIANT B — flow matrix
+function FlowMatrix({ filters, selection, onSelect }) {
+  const visibleRoles = ONT.roles.filter(r => (filters.domains.size === 0 || filters.domains.has(r.domain)) && (!filters.boundaryOnly || r.boundary));
+  const roleOrder = [...visibleRoles].sort((a, b) => {
+    const di = ONT.domains.findIndex(d => d.id === a.domain) - ONT.domains.findIndex(d => d.id === b.domain);
+    return di !== 0 ? di : a.id.localeCompare(b.id);
+  });
+  const visibleFlows = ONT.flows.filter(f => filters.flowKinds.has(f.kind) && (!filters.axiomsOnly || f.axiom) && (!filters.query || f.id.toLowerCase().includes(filters.query.toLowerCase())));
+
+  const rowH = 30, colW = 28, leftPad = 240, topPad = 170;
+  const W = leftPad + visibleFlows.length * colW + 40;
+  const H = topPad + roleOrder.length * rowH + 30;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="graph-svg" style={{minWidth: W}}>
+      {visibleFlows.map((f, i) => {
+        const x = leftPad + i * colW + colW / 2;
+        const isSel = selection && selection.kind === 'flow' && selection.id === f.id;
+        return (
+          <g key={f.id} transform={`translate(${x}, ${topPad - 8})`}>
+            <text transform="rotate(-55)" fontSize="10.5" fontFamily="JetBrains Mono" fill={isSel ? '#1a1a1a' : '#3a3a3a'} fontWeight={isSel ? 700 : 400} style={{cursor: 'pointer'}} onClick={() => onSelect({kind: 'flow', id: f.id, label: f.id})}>{f.id}</text>
+            <rect x="-6" y="0" width="12" height="5" fill={f.kind === 'material' ? '#5a3b22' : f.kind === 'cash' ? '#b78d2a' : '#3b6a96'} opacity="0.85"/>
+            {f.axiom && <circle cy="12" r="3.5" fill={f.axiom === 'blocking' ? '#c04a3a' : '#d49a2a'} stroke="#1a1a1a" strokeWidth="0.6"/>}
+          </g>
+        );
+      })}
+      {roleOrder.map((r, i) => {
+        const y = topPad + i * rowH;
+        const dom = domainById(r.domain);
+        const isSel = selection && selection.kind === 'role' && selection.id === r.id;
+        return (
+          <g key={r.id}>
+            <rect x="0" y={y + 2} width="10" height={rowH - 4} fill={dom.tint}/>
+            <text x="20" y={y + rowH / 2 + 4} fontSize="12" fontFamily="JetBrains Mono" fill={isSel ? '#1a1a1a' : '#3a3a3a'} fontWeight={isSel ? 600 : 400} style={{cursor: 'pointer'}} onClick={() => onSelect({kind: 'role', id: r.id, label: r.id})}>
+              {r.boundary ? '⌐ ' : ''}{r.id}
+            </text>
+            <line x1={leftPad} y1={y + rowH - 1} x2={W - 40} y2={y + rowH - 1} stroke="#ede7d6" strokeWidth="1"/>
+          </g>
+        );
+      })}
+      {visibleFlows.map((f, fi) => {
+        const srcIdx = roleOrder.findIndex(r => r.id === f.src);
+        const dstIdx = roleOrder.findIndex(r => r.id === f.dst);
+        if (srcIdx < 0 || dstIdx < 0) return null;
+        const x = leftPad + fi * colW + colW / 2;
+        const y1 = topPad + srcIdx * rowH + rowH / 2;
+        const y2 = topPad + dstIdx * rowH + rowH / 2;
+        const color = f.kind === 'material' ? '#5a3b22' : f.kind === 'cash' ? '#b78d2a' : '#3b6a96';
+        const isSel = selection && selection.kind === 'flow' && selection.id === f.id;
+        return (
+          <g key={f.id} className="sketchy" onClick={() => onSelect({kind: 'flow', id: f.id, label: f.id})} style={{cursor: 'pointer'}}>
+            <circle cx={x} cy={y1} r="4" fill={color} stroke="#1a1a1a" strokeWidth={isSel ? 1.8 : 0.8}/>
+            <line x1={x} y1={y1} x2={x} y2={y2} stroke={color} strokeWidth={isSel ? 2.5 : f.kind === 'material' ? 2.2 : 1.3} strokeDasharray={f.kind === 'information' ? '3 2' : ''} markerEnd={`url(#arrow-${f.kind})`}/>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// VARIANT C — domain density matrix
+function DomainTreemap({ filters, selection, onSelect }) {
+  const W = 1000, H = 620;
+  const domList = ONT.domains.map(d => d.id);
+  const matrix = {};
+  ONT.flows.forEach(f => {
+    if (!filters.flowKinds.has(f.kind)) return;
+    const s = roleById(f.src).domain, d = roleById(f.dst).domain;
+    const k = `${s}::${d}`;
+    matrix[k] = matrix[k] || { src: s, dst: d, flows: [] };
+    matrix[k].flows.push(f);
+  });
+  const cellW = W / domList.length, cellH = H / domList.length;
+  return (
+    <svg viewBox={`0 0 ${W + 160} ${H + 40}`} className="graph-svg">
+      {domList.map((d, i) => {
+        const dom = domainById(d);
+        return (
+          <g key={d}>
+            <text x={i * cellW + cellW / 2 + 160} y="22" textAnchor="middle" fontSize="11" fontFamily="JetBrains Mono" fontWeight="600">{d}</text>
+            <text x="148" y={i * cellH + cellH / 2 + 40 + 4} textAnchor="end" fontSize="11" fontFamily="JetBrains Mono" fontWeight="600">{d}</text>
+            <text x="148" y={i * cellH + cellH / 2 + 40 + 22} textAnchor="end" className="u-hand" fill="#8a8070" fontSize="14">{dom.hand}</text>
+          </g>
+        );
+      })}
+      <text x="80" y="16" className="u-hand" fill="#6a6359" fontSize="15">↓ src / dst →</text>
+      {domList.map((src, si) => domList.map((dst, di) => {
+        const k = `${src}::${dst}`;
+        const cell = matrix[k];
+        const x = di * cellW + 160, y = si * cellH + 40;
+        const dom = domainById(dst);
+        return (
+          <g key={k}>
+            <rect x={x} y={y} width={cellW - 2} height={cellH - 2} fill={src === dst ? dom.tint : '#fbf8ee'} stroke="#ede7d6" strokeWidth="0.8"/>
+            {cell && cell.flows.map((f, fi) => {
+              const cy = y + 16 + fi * 16;
+              const color = f.kind === 'material' ? '#5a3b22' : f.kind === 'cash' ? '#b78d2a' : '#3b6a96';
+              const isSel = selection && selection.kind === 'flow' && selection.id === f.id;
+              return (
+                <g key={f.id} style={{cursor: 'pointer'}} onClick={() => onSelect({kind: 'flow', id: f.id, label: f.id})}>
+                  <rect x={x + 6} y={cy - 5} width={cellW - 16} height="11" fill={color} opacity={isSel ? 1 : 0.8} rx="1"/>
+                  <text x={x + 10} y={cy + 3} fontSize="8" fontFamily="JetBrains Mono" fill="#fdfaef" fontWeight="600">{f.id.slice(0, 22)}</text>
+                  {f.axiom && <circle cx={x + cellW - 14} cy={cy} r="3" fill={f.axiom === 'blocking' ? '#c04a3a' : '#d49a2a'} stroke="#1a1a1a" strokeWidth="0.5"/>}
+                </g>
+              );
+            })}
+            {cell && <text x={x + cellW - 6} y={y + cellH - 6} textAnchor="end" fontSize="9" fontFamily="JetBrains Mono" fill="#6a6359">{cell.flows.length}</text>}
+          </g>
+        );
+      }))}
+    </svg>
+  );
+}
+
+function FilterRail({ filters, setFilters }) {
+  const toggleDomain = (id) => { const ns = new Set(filters.domains); ns.has(id) ? ns.delete(id) : ns.add(id); setFilters({...filters, domains: ns}); };
+  const toggleKind = (k) => { const ns = new Set(filters.flowKinds); ns.has(k) ? ns.delete(k) : ns.add(k); setFilters({...filters, flowKinds: ns}); };
+
+  return (
+    <div className="rail" style={{width: 240, flexShrink: 0}}>
+      <input className="search-box" placeholder="🔎 search roles, flows…" value={filters.query} onChange={(e) => setFilters({...filters, query: e.target.value})}/>
+      <h4>domain</h4>
+      {ONT.domains.map(d => (
+        <div key={d.id} className={`filter-chip ${filters.domains.has(d.id) || filters.domains.size === 0 ? 'on' : ''}`} onClick={() => toggleDomain(d.id)}>
+          <span className="sw" style={{background: d.tint}}></span>
+          <span>{d.id}</span>
+          <span style={{marginLeft: 'auto', fontSize: 10, opacity: 0.7}}>{ONT.roles.filter(r => r.domain === d.id).length}</span>
+        </div>
+      ))}
+      <h4>flow kind</h4>
+      {['information', 'material', 'cash'].map(k => (
+        <div key={k} className={`filter-chip ${filters.flowKinds.has(k) ? 'on' : ''}`} onClick={() => toggleKind(k)}>
+          <FlowGlyph kind={k} width={28}/>
+          <span>{k}</span>
+          <span style={{marginLeft: 'auto', fontSize: 10, opacity: 0.7}}>{ONT.flows.filter(f => f.kind === k).length}</span>
+        </div>
+      ))}
+      <h4>constraint</h4>
+      <div className={`filter-chip ${filters.boundaryOnly ? 'on' : ''}`} onClick={() => setFilters({...filters, boundaryOnly: !filters.boundaryOnly})}>
+        <span className="sw" style={{borderStyle: 'dashed'}}></span><span>boundary only</span>
+      </div>
+      <div className={`filter-chip ${filters.axiomsOnly ? 'on' : ''}`} onClick={() => setFilters({...filters, axiomsOnly: !filters.axiomsOnly})}>
+        <span className="sw" style={{background: '#c04a3a'}}></span><span>flows with axioms</span>
+      </div>
+      <h4>new +</h4>
+      <button className="new-dropdown"><span>+ role / flow / event</span><span className="plus">+</span></button>
+      <div className="u-hand u-muted" style={{fontSize: 13, marginTop: 6, lineHeight: 1.2}}>
+        or right-click a node →<br/>"add flow from here"
+      </div>
+      <h4>stats</h4>
+      <div style={{fontSize: 10.5, lineHeight: 1.6, color: 'var(--ink-soft)'}}>
+        <div><b>{ONT.roles.length}</b> roles ({ONT.roles.filter(r => r.boundary).length} boundary)</div>
+        <div><b>{ONT.flows.length}</b> flows</div>
+        <div><b>{ONT.events.length}</b> events</div>
+        <div><b>{ONT.stateMachines.length}</b> state machines</div>
+        <div><b>{ONT.axioms.length}</b> axioms</div>
+      </div>
+    </div>
+  );
+}
+
+function StructureScreen({ selection, onSelect, breadcrumb, onNavigate, variant, setVariant }) {
+  const [filters, setFilters] = useStateS({
+    domains: new Set(), flowKinds: new Set(['information', 'material', 'cash']),
+    boundaryOnly: false, axiomsOnly: false, query: '',
+  });
+  return (
+    <div style={{display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0}}>
+      <div className="variant-tabs">
+        <button className={variant === 'A' ? 'active' : ''} onClick={() => setVariant('A')}><span className="vtag">A</span> role graph</button>
+        <button className={variant === 'B' ? 'active' : ''} onClick={() => setVariant('B')}><span className="vtag">B</span> flow matrix</button>
+        <button className={variant === 'C' ? 'active' : ''} onClick={() => setVariant('C')}><span className="vtag">C</span> domain density</button>
+        <span className="variant-note">3 ways to read the same data — pick per task</span>
+      </div>
+      <div style={{display: 'flex', flex: 1, minHeight: 0}}>
+        <FilterRail filters={filters} setFilters={setFilters}/>
+        <div className="canvas-wrap" onClick={() => onSelect(null)}>
+          <div className="canvas-toolbar">
+            <button>− zoom</button><button>+ zoom</button><button>⤢ fit</button>
+            <span style={{padding: '3px 8px', color: 'var(--ink-muted)'}}>{ONT.roles.length} roles · {ONT.flows.length} flows</span>
+          </div>
+          <div style={{width: '100%', height: '100%', overflow: variant === 'B' ? 'auto' : 'hidden'}}>
+            {variant === 'A' && <RoleGraph filters={filters} selection={selection} onSelect={onSelect}/>}
+            {variant === 'B' && <FlowMatrix filters={filters} selection={selection} onSelect={onSelect}/>}
+            {variant === 'C' && <DomainTreemap filters={filters} selection={selection} onSelect={onSelect}/>}
+          </div>
+          {variant === 'A' && <Legend/>}
+        </div>
+        <div className="rail rail-right" style={{width: 330, flexShrink: 0}}>
+          <ContextPanel selection={selection} breadcrumb={breadcrumb} onNavigate={onNavigate}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.StructureScreen = StructureScreen;
+
+</script>
+<script type="text/babel" data-presets="react">
+// === cascade.jsx ===
+// Screen 2 — Cascade view: trace a request through the ontology
+
+function CascadeScreen({ selection, onSelect, breadcrumb, onNavigate }) {
+  const [startFlow, setStartFlow] = React.useState('submit_promo_plan');
+  const [depth, setDepth] = React.useState(5);
+  const [showAxioms, setShowAxioms] = React.useState(true);
+
+  // Build a simple cascade: follow `trig` events / downstream flows
+  // Each "hop" is (flow) -> observes event at dst -> triggers outgoing flows
+  const cascade = React.useMemo(() => {
+    const seen = new Set();
+    const steps = [];
+    const queue = [{ flowId: startFlow, depth: 0, parent: null }];
+    while (queue.length && steps.length < 80) {
+      const { flowId, depth: d, parent } = queue.shift();
+      if (seen.has(flowId) || d > depth) continue;
+      seen.add(flowId);
+      const f = flowById(flowId);
+      if (!f) continue;
+      steps.push({ flow: f, depth: d, parent });
+      // Find events observed by f.dst and flows they trigger
+      ONT.events.filter(e => e.observed_by === f.dst).forEach(ev => {
+        ONT.flows.filter(nf => nf.trig === ev.id).forEach(nf => {
+          queue.push({ flowId: nf.id, depth: d + 1, parent: { flowId: f.id, via: ev.id } });
+        });
+      });
+    }
+    return steps;
+  }, [startFlow, depth]);
+
+  // Lay out: each depth is a column
+  const byDepth = {};
+  cascade.forEach(s => { (byDepth[s.depth] = byDepth[s.depth] || []).push(s); });
+  const maxDepth = Math.max(...cascade.map(s => s.depth), 0);
+  const colW = 260, rowH = 70, padL = 40, padT = 40;
+
+  // Position each step
+  const positions = {};
+  Object.keys(byDepth).forEach(d => {
+    byDepth[d].forEach((s, i) => {
+      positions[s.flow.id] = { x: padL + d * colW, y: padT + i * rowH };
+    });
+  });
+
+  const W = padL + (maxDepth + 1) * colW + 40;
+  const H = Math.max(padT + Math.max(...Object.values(byDepth).map(v => v.length)) * rowH + 40, 600);
+
+  return (
+    <div style={{display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0}}>
+      <div className="cascade-controls">
+        <label>start flow:</label>
+        <select className="picker" value={startFlow} onChange={(e) => setStartFlow(e.target.value)}>
+          {ONT.flows.map(f => <option key={f.id} value={f.id}>{f.id}</option>)}
+        </select>
+        <label>max depth:</label>
+        <select className="picker" value={depth} onChange={(e) => setDepth(+e.target.value)}>
+          {[2, 3, 4, 5, 6, 8].map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <label style={{display: 'flex', gap: 4, alignItems: 'center'}}>
+          <input type="checkbox" checked={showAxioms} onChange={(e) => setShowAxioms(e.target.checked)}/>
+          show axioms
+        </label>
+        <span className="u-hand u-muted" style={{fontSize: 15, marginLeft: 'auto'}}>
+          trace how a request cascades through roles
+        </span>
+      </div>
+
+      <div style={{display: 'flex', flex: 1, minHeight: 0}}>
+        <div className="rail" style={{width: 240, flexShrink: 0}}>
+          <h4>common starting points</h4>
+          {[
+            { id: 'submit_promo_plan', note: 'promo enters demand' },
+            { id: 'submit_supply_request', note: 'forecast → network' },
+            { id: 'request_production', note: 'production requested' },
+            { id: 'submit_procurement_request', note: 'procurement chain' },
+            { id: 'raise_demand_anomaly', note: 'anomaly ingress' },
+          ].map(p => (
+            <div key={p.id} className={`filter-chip ${startFlow === p.id ? 'on' : ''}`} onClick={() => setStartFlow(p.id)}>
+              <FlowGlyph kind={(flowById(p.id) || {}).kind || 'information'} width={24}/>
+              <div style={{lineHeight: 1.2}}>
+                <div>{p.id}</div>
+                <div className="u-hand u-muted" style={{fontSize: 12}}>{p.note}</div>
+              </div>
+            </div>
+          ))}
+
+          <h4>legend</h4>
+          <div style={{fontSize: 10.5, lineHeight: 1.7, color: 'var(--ink-soft)'}}>
+            <div>→ solid step = cascades directly</div>
+            <div>⋯ dotted = triggered via event</div>
+            <div>● axiom gate along path</div>
+          </div>
+
+          <div className="hint-block" style={{marginTop: 18}}>
+            <span className="hint-lbl">why this view</span>
+            Debug agent handoffs. See every downstream flow that fires when a starting request arrives.
+          </div>
+        </div>
+
+        <div className="canvas-wrap" style={{overflow: 'auto'}}>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{width: W, height: H, display: 'block'}}>
+            {/* Depth column headers */}
+            {Array.from({length: maxDepth + 1}, (_, d) => (
+              <g key={d}>
+                <text x={padL + d * colW} y="20" fontSize="10" fontFamily="JetBrains Mono" fontWeight="600" fill="#6a6359">
+                  ― depth {d} {d === 0 ? '(request)' : ''}
+                </text>
+                <line x1={padL + d * colW + 220} y1="14" x2={padL + d * colW + 220} y2={H} stroke="#ede7d6" strokeWidth="1" strokeDasharray="2 4"/>
+              </g>
+            ))}
+
+            {/* Parent arrows */}
+            <g className="sketchy">
+              {cascade.map(s => {
+                if (!s.parent) return null;
+                const a = positions[s.parent.flowId];
+                const b = positions[s.flow.id];
+                if (!a || !b) return null;
+                const ax = a.x + 200, ay = a.y + 24;
+                const bx = b.x, by = b.y + 24;
+                const mx = (ax + bx) / 2;
+                return (
+                  <g key={`a-${s.flow.id}`}>
+                    <path d={`M${ax},${ay} C${mx},${ay} ${mx},${by} ${bx},${by}`} fill="none" stroke="#1a1a1a" strokeWidth="1.2" strokeDasharray="3 2" markerEnd="url(#arrow-ink)"/>
+                    <text x={(ax + bx) / 2} y={(ay + by) / 2 - 6} textAnchor="middle" fontFamily="Caveat" fontSize="13" fill="#6a6359">
+                      via {s.parent.via}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+
+            {/* Flow cards */}
+            {cascade.map(s => {
+              const f = s.flow;
+              const p = positions[f.id];
+              if (!p) return null;
+              const src = roleById(f.src);
+              const dst = roleById(f.dst);
+              const srcDom = domainById(src.domain);
+              const dstDom = domainById(dst.domain);
+              const isSel = selection && selection.kind === 'flow' && selection.id === f.id;
+              const color = f.kind === 'material' ? '#5a3b22' : f.kind === 'cash' ? '#b78d2a' : '#3b6a96';
+              return (
+                <g key={f.id} transform={`translate(${p.x}, ${p.y})`} style={{cursor: 'pointer'}}
+                   onClick={() => onSelect({kind: 'flow', id: f.id, label: f.id})}>
+                  <rect x="0" y="0" width="200" height="48" rx="2" fill="#fdfaef" stroke={isSel ? '#1a1a1a' : '#6a6359'} strokeWidth={isSel ? 2 : 1.2}/>
+                  {/* domain bands */}
+                  <rect x="0" y="0" width="200" height="6" fill={srcDom.tint}/>
+                  <rect x="0" y="42" width="200" height="6" fill={dstDom.tint}/>
+                  <text x="8" y="22" fontSize="11" fontFamily="JetBrains Mono" fontWeight="600">{f.id}</text>
+                  <text x="8" y="35" fontSize="9.5" fontFamily="JetBrains Mono" fill="#6a6359">{f.src} → {f.dst}</text>
+                  {/* kind glyph */}
+                  <g transform="translate(160, 20)">
+                    <rect x="0" y="-6" width="32" height="12" fill={color} opacity="0.85"/>
+                    <text x="16" y="3" textAnchor="middle" fontSize="8" fill="#fdfaef" fontFamily="JetBrains Mono" fontWeight="700">{f.kind.slice(0, 4).toUpperCase()}</text>
+                  </g>
+                  {/* axiom warning */}
+                  {showAxioms && f.axiom && (
+                    <g transform="translate(148, 20)">
+                      <circle r="8" fill={f.axiom === 'blocking' ? '#c04a3a' : '#d49a2a'} stroke="#1a1a1a" strokeWidth="1"/>
+                      <text textAnchor="middle" y="3.5" fontFamily="JetBrains Mono" fontSize="10" fontWeight="700" fill="#fdfaef">!</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Empty hint for depth 0 */}
+            {cascade.length === 0 && (
+              <text x={W / 2} y={H / 2} textAnchor="middle" fontFamily="Caveat" fontSize="22" fill="#8a8070">
+                pick a starting flow ←
+              </text>
+            )}
+          </svg>
+        </div>
+
+        <div className="rail rail-right" style={{width: 330, flexShrink: 0}}>
+          <ContextPanel selection={selection} breadcrumb={breadcrumb} onNavigate={onNavigate}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+window.CascadeScreen = CascadeScreen;
+
+</script>
+<script type="text/babel" data-presets="react">
+// === authoring.jsx ===
+// Screen 3 — Authoring overlay (add a flow)
+// Shown as a full screen variant with form-on-right, preview-on-left.
+
+function AuthoringScreen({ selection, onSelect, breadcrumb, onNavigate }) {
+  const [form, setForm] = React.useState({
+    id: 'request_coman_transfer',
+    src: 'supply_planning',
+    dst: 'co_manufacturing',
+    kind: 'material',
+    quantum: 'ProductionRequest',
+    trig: 'capacity_resolved',
+    life: 'ProductionRequestLifecycle',
+    returns: '',
+    axiom: 'coman_qualified_for_sku',
+    axiomSev: 'blocking',
+    axiomNl: 'co-manufacturer must be qualified for the SKU before shifting production.',
+  });
+
+  const idError = form.id.includes(' ') ? 'no spaces — use snake_case' : null;
+  const axiomRefsQuery = form.axiom && form.axiom.includes('within');
+
+  const srcRole = roleById(form.src);
+  const dstRole = roleById(form.dst);
+
+  const [validateState, setValidateState] = React.useState('ok'); // 'ok' | 'pending' | 'error'
+
+  // Derived: flows-touching-role pill count
+  const srcFlowCount = ONT.flows.filter(f => f.src === form.src || f.dst === form.src).length;
+
+  return (
+    <div style={{display: 'flex', flex: 1, minHeight: 0}}>
+      <div className="rail" style={{width: 220, flexShrink: 0}}>
+        <h4>branch</h4>
+        <div style={{background: '#fff6cf', padding: 8, border: '1px dashed #c9a227', borderRadius: 3, fontSize: 11}}>
+          <div style={{fontFamily: 'JetBrains Mono', fontWeight: 600}}>feat/coman-transfer</div>
+          <div className="u-hand u-muted" style={{fontSize: 13, marginTop: 2}}>based on: main @ a3f91c</div>
+          <div style={{marginTop: 6, fontSize: 10.5, color: '#6a6359'}}>
+            <span style={{color: '#4b8a4a'}}>+2</span> added · <span style={{color: '#c9a227'}}>~1</span> modified
+          </div>
+        </div>
+
+        <h4>other pending changes</h4>
+        <div style={{fontSize: 10.5, lineHeight: 1.5, color: 'var(--ink-soft)'}}>
+          <div style={{padding: '4px 0', borderBottom: '1px dotted #ede7d6'}}>
+            <span style={{color: '#4b8a4a'}}>+</span> flow <code>re_request_production</code>
+            <div className="u-hand u-muted" style={{fontSize: 12}}>internal re-entry on resolve</div>
+          </div>
+          <div style={{padding: '4px 0', borderBottom: '1px dotted #ede7d6'}}>
+            <span style={{color: '#c9a227'}}>~</span> role <code>supply_planning</code>
+            <div className="u-hand u-muted" style={{fontSize: 12}}>human_involvement: autonomous → conditional</div>
+          </div>
+        </div>
+
+        <h4>impact preview</h4>
+        <div style={{fontSize: 10.5, color: 'var(--ink-soft)', lineHeight: 1.5}}>
+          <div>affects <b>2</b> axioms</div>
+          <div>affects <b>1</b> FSM (<code>po_lifecycle_fsm</code>)</div>
+          <div>neighbours: <b>{srcFlowCount}</b> flows on <code>supplier</code></div>
+        </div>
+
+        <div className="hint-block" style={{marginTop: 14}}>
+          <span className="hint-lbl">ontologist's view</span>
+          Same shape as the YAML. Nothing hidden behind icons — every slot here maps 1:1 to LinkML.
+        </div>
+      </div>
+
+      <div className="canvas-wrap" style={{padding: '20px 24px', overflow: 'auto'}}>
+        <h3 style={{fontFamily: 'JetBrains Mono', fontSize: 14, marginTop: 0}}>
+          <span className="u-hand" style={{color: '#c9a227', marginRight: 8, fontSize: 20}}>✎</span>
+          live preview · <span className="u-muted">what the graph will look like after commit</span>
+        </h3>
+
+        {/* Mini-graph preview */}
+        <svg viewBox="0 0 660 280" style={{width: '100%', maxWidth: 680, background: '#fdfaef', border: '1px dashed #8a8070', borderRadius: 3}}>
+          <defs><marker id="arrow-preview" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b6a96"/></marker></defs>
+
+          {/* source role */}
+          <g transform="translate(120, 140)">
+            <rect x="-55" y="-16" width="110" height="32" rx="2" fill="#f7f3ea" stroke="#1a1a1a" strokeWidth="1.5" strokeDasharray={srcRole?.boundary ? '6 3' : ''}/>
+            <text textAnchor="middle" y="3" fontFamily="JetBrains Mono" fontSize="12" fontWeight="600">{form.src}</text>
+          </g>
+          {/* dst role */}
+          <g transform="translate(540, 140)">
+            <rect x="-55" y="-16" width="110" height="32" rx="2" fill="#f7f3ea" stroke="#1a1a1a" strokeWidth="1.5"/>
+            <text textAnchor="middle" y="3" fontFamily="JetBrains Mono" fontSize="12" fontWeight="600">{form.dst}</text>
+          </g>
+
+          {/* NEW flow edge — highlighted */}
+          <g className="sketchy">
+            <path d="M175,140 Q330,90 485,140" fill="none" stroke="#3b6a96" strokeWidth="2" strokeDasharray="5 3" markerEnd="url(#arrow-preview)"/>
+            <rect x="280" y="70" width="100" height="20" fill="#fff6cf" stroke="#c9a227" strokeWidth="1" rx="2"/>
+            <text x="330" y="84" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="10" fontWeight="700" fill="#6a6359">+ {form.id}</text>
+            {/* axiom badge */}
+            <g transform="translate(330, 140)">
+              <circle r="9" fill="#d49a2a" stroke="#1a1a1a" strokeWidth="1"/>
+              <text textAnchor="middle" y="4" fontFamily="JetBrains Mono" fontSize="11" fontWeight="700" fill="#fdfaef">!</text>
+            </g>
+            <text x="330" y="168" textAnchor="middle" fontFamily="Caveat" fontSize="14" fill="#6a6359">{form.axiomSev}: {form.axiom}</text>
+          </g>
+
+          {/* quantum + trigger annotations */}
+          <g>
+            <text x="120" y="210" textAnchor="middle" fontFamily="Caveat" fontSize="14" fill="#6a6359">triggered by → {form.trig}</text>
+            <text x="540" y="210" textAnchor="middle" fontFamily="Caveat" fontSize="14" fill="#6a6359">observes → po_received</text>
+            <text x="330" y="230" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="10.5" fill="#3a3a3a">quantum: <tspan fontWeight="600">{form.quantum}</tspan></text>
+            <text x="330" y="248" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="10.5" fill="#3a3a3a">lifecycle: <tspan fontWeight="600">{form.life}</tspan></text>
+          </g>
+        </svg>
+
+        <h3 style={{fontFamily: 'JetBrains Mono', fontSize: 13, marginTop: 24}}>linkml preview</h3>
+        <pre style={{background: '#fdfaef', border: '1px dashed #8a8070', padding: 12, fontSize: 11.5, fontFamily: 'JetBrains Mono', lineHeight: 1.5, borderRadius: 3, overflowX: 'auto'}}>
+{`- id: ${form.id}
+  source_role: ${form.src}
+  target_role: ${form.dst}
+  flow_kind: ${form.kind}
+  quantum: ${form.quantum}
+  trigger_event: ${form.trig}
+  lifecycle_ref: ${form.life}
+  axioms:
+    - name: ${form.axiom}
+      severity: ${form.axiomSev}
+      nl: "${form.axiomNl}"`}
+        </pre>
+
+        <h3 style={{fontFamily: 'JetBrains Mono', fontSize: 13, marginTop: 20}}>axiom impact</h3>
+        <div style={{background: '#fdfaef', border: '1px dashed #8a8070', padding: 10, fontSize: 11.5, borderRadius: 3}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0'}}>
+            <span className="axiom-dot warning"></span>
+            <span><b>{form.axiom}</b> <span className="u-hand u-muted" style={{fontSize: 13}}>— applies to this flow only</span></span>
+          </div>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0'}}>
+            <span className="axiom-dot blocking"></span>
+            <span><b>all_orders_ack_within_48h</b> <span className="u-hand u-muted" style={{fontSize: 13}}>— scope widens to include po_revision_ack (inherited)</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div className="authoring-rail">
+        <h3><span className="sketch">+</span>new flow</h3>
+        <div className="u-hand u-muted" style={{fontSize: 14, marginBottom: 14}}>
+          fields mirror the LinkML <code style={{fontSize: 11}}>FlowType</code> class
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">flow id</label>
+          <input className={`form-input ${idError ? 'error' : 'valid'}`} value={form.id} onChange={(e) => setForm({...form, id: e.target.value})}/>
+          {idError && <div className="form-err">{idError}</div>}
+          {!idError && <div style={{fontFamily: 'Caveat', fontSize: 13, color: '#4b8a4a', marginTop: 2}}>✓ unique in branch</div>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">flow kind</label>
+          <div className="seg">
+            {['information', 'material', 'cash'].map(k => (
+              <button key={k} className={form.kind === k ? 'on' : ''} onClick={() => setForm({...form, kind: k})}>{k}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">source role</label>
+          <select className="form-select" value={form.src} onChange={(e) => setForm({...form, src: e.target.value})}>
+            {ONT.roles.map(r => <option key={r.id} value={r.id}>{r.id}{r.boundary ? ' (boundary)' : ''}</option>)}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">target role</label>
+          <select className="form-select" value={form.dst} onChange={(e) => setForm({...form, dst: e.target.value})}>
+            {ONT.roles.map(r => <option key={r.id} value={r.id}>{r.id}{r.boundary ? ' (boundary)' : ''}</option>)}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">quantum</label>
+          <input className="form-input" value={form.quantum} onChange={(e) => setForm({...form, quantum: e.target.value})}/>
+          <div style={{fontFamily: 'Caveat', fontSize: 13, color: '#8a8070', marginTop: 2}}>typed entity class</div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">trigger event</label>
+          <select className="form-select" value={form.trig} onChange={(e) => setForm({...form, trig: e.target.value})}>
+            <option value="">(none)</option>
+            {ONT.events.map(e => <option key={e.id} value={e.id}>{e.id}</option>)}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">lifecycle ref</label>
+          <select className="form-select" value={form.life} onChange={(e) => setForm({...form, life: e.target.value})}>
+            <option value="">(none)</option>
+            {ONT.stateMachines.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">returns (query flow)</label>
+          <input className="form-input" value={form.returns} placeholder="leave blank unless this is a query" onChange={(e) => setForm({...form, returns: e.target.value})}/>
+          <div className={`query-indicator ${form.returns ? 'on' : ''}`}>
+            ⇆ this will be classified as a query flow
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">axiom (optional)</label>
+          <input className="form-input" value={form.axiom} onChange={(e) => setForm({...form, axiom: e.target.value})} placeholder="name"/>
+          <div style={{display: 'flex', gap: 4, marginTop: 4}}>
+            {['blocking', 'warning', 'advisory'].map(s => (
+              <button key={s} style={{
+                flex: 1, fontFamily: 'JetBrains Mono', fontSize: 10, padding: '4px', cursor: 'pointer',
+                border: `1px solid ${form.axiomSev === s ? '#1a1a1a' : '#8a8070'}`,
+                background: form.axiomSev === s ? (s === 'blocking' ? '#c04a3a' : s === 'warning' ? '#d49a2a' : '#8a8070') : 'transparent',
+                color: form.axiomSev === s ? '#fdfaef' : '#3a3a3a',
+                borderRadius: 2,
+              }} onClick={() => setForm({...form, axiomSev: s})}>{s}</button>
+            ))}
+          </div>
+          <textarea className="form-input form-textarea" style={{marginTop: 6}} value={form.axiomNl} onChange={(e) => setForm({...form, axiomNl: e.target.value})}/>
+          <div style={{fontFamily: 'Caveat', fontSize: 13, color: '#8a8070', marginTop: 2}}>NL is the authoritative rule; code enforces it</div>
+        </div>
+
+        <div className={`validate-status ${validateState === 'error' ? 'error' : validateState === 'pending' ? 'pending' : ''}`}>
+          <span className="dot"></span>
+          <span>
+            {validateState === 'ok' && <>✓ passes structural + shape validation</>}
+            {validateState === 'pending' && <>… running exploder.py --lint</>}
+            {validateState === 'error' && <>✗ cycle detected in lifecycle_ref</>}
+          </span>
+        </div>
+
+        <div style={{display: 'flex', gap: 6}}>
+          <button className="commit-btn" style={{flex: 1}}>commit to branch</button>
+          <button className="commit-btn" style={{flex: 0, padding: '10px 14px', background: 'transparent', color: '#1a1a1a', border: '1.2px solid #1a1a1a'}} onClick={() => setValidateState(validateState === 'ok' ? 'pending' : 'ok')}>
+            re-lint
+          </button>
+        </div>
+
+        <div className="u-hand u-muted" style={{fontSize: 13, marginTop: 10, textAlign: 'center'}}>
+          commit → opens PR → reviewer validates NL vs code
+        </div>
+      </div>
+    </div>
+  );
+}
+window.AuthoringScreen = AuthoringScreen;
+
+</script>
+<script type="text/babel" data-presets="react">
+// === fsm_detail.jsx ===
+// Screen 4 — State machine detail
+
+function FSMScreen({ selection, onSelect, breadcrumb, onNavigate }) {
+  const [fsmId, setFsmId] = React.useState('ProductionRequestLifecycle');
+  const fsm = fsmById(fsmId);
+  if (!fsm) return <div>FSM not found</div>;
+
+  // Simple horizontal layout per FSM
+  const layouts = {
+    ProductionRequestLifecycle: {
+      requested:     { x: 120, y: 280 },
+      assigned:      { x: 320, y: 280 },
+      scheduled:     { x: 520, y: 280 },
+      in_production: { x: 720, y: 280 },
+      completed:     { x: 920, y: 280 },
+      cancelled:     { x: 520, y: 440 },
+    },
+    RequestLifecycle: {
+      draft:     { x: 120, y: 280 },
+      submitted: { x: 350, y: 280 },
+      approved:  { x: 600, y: 200 },
+      rejected:  { x: 600, y: 340 },
+      expired:   { x: 600, y: 460 },
+    },
+    PurchaseOrderLifecycle: {
+      draft:        { x: 120, y: 280 },
+      transmitted:  { x: 320, y: 280 },
+      acknowledged: { x: 540, y: 280 },
+      fulfilled:    { x: 760, y: 280 },
+      cancelled:    { x: 320, y: 440 },
+    },
+    TradePromotionLifecycle: {
+      proposed:  { x: 120, y: 280 },
+      aligned:   { x: 320, y: 280 },
+      committed: { x: 520, y: 280 },
+      executing: { x: 720, y: 280 },
+      completed: { x: 920, y: 280 },
+      revised:   { x: 420, y: 440 },
+      cancelled: { x: 720, y: 440 },
+    },
+  };
+  const statePos = layouts[fsmId] || {};
+
+  const [selTrans, setSelTrans] = React.useState(null);
+  const isTerminal = (s) => fsm.terminal.includes(s);
+  const isInitial = (s) => fsm.initial === s;
+
+  return (
+    <div style={{display: 'flex', flex: 1, minHeight: 0}}>
+      <div className="rail" style={{width: 240, flexShrink: 0}}>
+        <h4>pick state machine</h4>
+        {ONT.stateMachines.map(s => (
+          <div key={s.id} className={`filter-chip ${fsmId === s.id ? 'on' : ''}`} onClick={() => { setFsmId(s.id); setSelTrans(null); }}>
+            <span className="sw" style={{background: domainById(s.domain).tint}}></span>
+            <span style={{fontSize: 10.5}}>{s.id}</span>
+          </div>
+        ))}
+
+        <h4>flows sharing this lifecycle</h4>
+        {fsm.flowsSharing.map(fid => (
+          <div key={fid} style={{padding: '4px 0', borderBottom: '1px dotted #ede7d6'}}>
+            <Chip kind="flow" label={fid} onClick={() => onNavigate({kind: 'flow', id: fid, label: fid})}/>
+          </div>
+        ))}
+
+        <h4>transitions ({fsm.transitions.length})</h4>
+        <div style={{fontSize: 10.5, lineHeight: 1.5}}>
+          {fsm.transitions.map((t, i) => (
+            <div key={i} style={{padding: '3px 0', cursor: 'pointer', background: selTrans === i ? '#fff6cf' : 'transparent', borderLeft: t.guard ? '2px solid #c04a3a' : '2px solid transparent', paddingLeft: 6}}
+              onClick={() => setSelTrans(i)}>
+              <div style={{fontFamily: 'JetBrains Mono', fontSize: 10.5}}>{t.from} → {t.to}</div>
+              <div className="u-hand u-muted" style={{fontSize: 12}}>on {t.trigger}{t.guard ? ` · ⚠ ${t.guard}` : ''}</div>
+            </div>
+          ))}
+        </div>
+
+        <h4>states ({fsm.states.length})</h4>
+        <div style={{fontSize: 10.5, lineHeight: 1.6}}>
+          <div><span className="u-hand" style={{color: '#4b8a4a'}}>◉</span> initial: <b>{fsm.initial}</b></div>
+          <div><span className="u-hand" style={{color: '#6a6359'}}>⊙</span> terminal: <b>{fsm.terminal.join(', ')}</b></div>
+        </div>
+
+        <div className="hint-block">
+          <span className="hint-lbl">note</span>
+          Flows sharing this FSM give a single source of truth for state — not duplicated per flow.
+        </div>
+      </div>
+
+      <div className="canvas-wrap" style={{overflow: 'auto'}}>
+        <div className="canvas-toolbar">
+          <span style={{padding: '3px 8px', color: 'var(--ink-muted)'}}>{fsm.id}</span>
+        </div>
+        <svg viewBox="0 0 1080 560" style={{width: '100%', height: '100%'}} onClick={() => setSelTrans(null)}>
+          <g className="sketchy">
+            {fsm.transitions.map((t, i) => {
+              const a = statePos[t.from], b = statePos[t.to];
+              if (!a || !b) return null;
+              const ax = a.x + 60, ay = a.y, bx = b.x - 60, by = b.y;
+              const dy = by - ay, mx = (ax + bx) / 2;
+              const cy = (ay + by) / 2 + (Math.abs(dy) > 10 ? 0 : 30);
+              const d = Math.abs(dy) < 5 ? `M${ax},${ay} L${bx},${by}` : `M${ax},${ay} Q${mx},${cy} ${bx},${by}`;
+              const isSel = selTrans === i;
+              return (
+                <g key={i} style={{cursor: 'pointer'}} onClick={(e) => { e.stopPropagation(); setSelTrans(i); }}>
+                  <path d={d} className={`fsm-transition ${t.guard ? 'guarded' : ''}`} markerEnd="url(#arrow-ink)" strokeWidth={isSel ? 2.2 : 1.2}/>
+                  <g transform={`translate(${(ax + bx) / 2}, ${(ay + by) / 2 - 10})`}>
+                    <rect x="-48" y="-9" width="96" height="15" fill="#f7f3ea" stroke="none"/>
+                    <text textAnchor="middle" y="2" className="fsm-label">on {t.trigger}</text>
+                  </g>
+                  {t.guard && (
+                    <g transform={`translate(${(ax + bx) / 2}, ${(ay + by) / 2 + 14})`} className="fsm-guard-chip"
+                       onClick={(e) => { e.stopPropagation(); const ax2 = ONT.axioms.find(ax => ax.name === t.guard); if (ax2) onNavigate({kind: 'axiom', id: t.guard, label: t.guard}); }}>
+                      <rect x="-72" y="-8" width="144" height="16" rx="2"/>
+                      <text textAnchor="middle" y="4">⚠ {t.guard}</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+
+          {fsm.states.map(s => {
+            const p = statePos[s];
+            if (!p) return null;
+            const terminal = isTerminal(s), initial = isInitial(s);
+            return (
+              <g key={s} transform={`translate(${p.x}, ${p.y})`} className={`fsm-state-node ${initial ? 'initial' : ''} ${terminal ? 'terminal' : ''}`}
+                 style={{cursor: 'pointer'}} onClick={(e) => { e.stopPropagation(); onSelect({kind: 'fsm', id: fsmId, label: fsmId}); }}>
+                {terminal && <rect x="-63" y="-23" width="126" height="46" rx="3" className="terminator"/>}
+                <rect x="-58" y="-20" width="116" height="40" rx="2"/>
+                <text textAnchor="middle" y="4" fontWeight={initial ? 700 : 500}>{s}</text>
+                {initial && <text textAnchor="middle" y="-28" fontFamily="Caveat" fontSize="15" fill="#4b8a4a">◉ initial</text>}
+                {terminal && <text textAnchor="middle" y="36" fontFamily="Caveat" fontSize="14" fill="#6a6359">⊙ terminal</text>}
+              </g>
+            );
+          })}
+
+          <text x="30" y="36" fontFamily="JetBrains Mono" fontSize="14" fontWeight="700">{fsm.id}</text>
+          <text x="30" y="56" fontFamily="Caveat" fontSize="16" fill="#6a6359">shared by {fsm.flowsSharing.length} flow{fsm.flowsSharing.length === 1 ? '' : 's'} — one state per instance</text>
+        </svg>
+      </div>
+
+      <div className="rail rail-right" style={{width: 330, flexShrink: 0}}>
+        {selTrans !== null ? (
+          <div>
+            <div className="panel-header"><span className="panel-kind">transition</span></div>
+            <div className="panel-name">{fsm.transitions[selTrans].from} → {fsm.transitions[selTrans].to}</div>
+            <div style={{marginTop: 10}}>
+              <div className="row"><span className="k">on trigger</span><span className="v">{fsm.transitions[selTrans].trigger}</span></div>
+              {fsm.transitions[selTrans].guard && (
+                <div className="row"><span className="k">guard axiom</span><span className="v">
+                  <Chip label={fsm.transitions[selTrans].guard} onClick={() => onNavigate({kind: 'axiom', id: fsm.transitions[selTrans].guard, label: fsm.transitions[selTrans].guard})}/>
+                  <span className="u-hand u-muted" style={{marginLeft: 6, fontSize: 14}}>— blocks if fails</span>
+                </span></div>
+              )}
+            </div>
+            <div className="hint-block">
+              <span className="hint-lbl">axiom as guard</span>
+              Axioms gate transitions. A blocking axiom must pass or the state change is rejected.
+            </div>
+          </div>
+        ) : (
+          <ContextPanel selection={selection || { kind: 'fsm', id: fsmId }} breadcrumb={breadcrumb} onNavigate={onNavigate}/>
+        )}
+      </div>
+    </div>
+  );
+}
+window.FSMScreen = FSMScreen;
+
+// ============================================================
+// App — merged into this script because Babel-standalone has
+// a habit of silently skipping the very last inline script
+// when there are many of them.
+// ============================================================
+
+function App() {
+  const [screen, setScreen] = React.useState(() => {
+    try { return +localStorage.getItem('ontScreen') || 1; } catch { return 1; }
+  });
+  const [variant, setVariant] = React.useState(() => {
+    try { return localStorage.getItem('ontVariant') || 'A'; } catch { return 'A'; }
+  });
+  const [selection, setSelection] = React.useState(null);
+  const [breadcrumb, setBreadcrumb] = React.useState([]);
+
+  React.useEffect(() => { try { localStorage.setItem('ontScreen', screen); } catch {} }, [screen]);
+  React.useEffect(() => { try { localStorage.setItem('ontVariant', variant); } catch {} }, [variant]);
+
+  const navigate = (sel) => {
+    if (sel.kind === 'fsmdetail') { setScreen(4); setSelection(null); setBreadcrumb([]); return; }
+    setBreadcrumb(prev => {
+      if (prev.length && prev[prev.length - 1].id === sel.id && prev[prev.length - 1].kind === sel.kind) return prev;
+      const trimmed = prev.slice(-5);
+      return [...trimmed, { kind: sel.kind, id: sel.id, label: sel.label || sel.id }];
+    });
+    setSelection(sel);
+  };
+  const handleSelect = (sel) => { if (!sel) { setSelection(null); return; } navigate(sel); };
+
+  return (
+    <div className="app">
+      <SketchyFilters/>
+      <header className="app-header">
+        <div className="app-title">
+          <span className="tag">~</span>
+          <span>ontology editor</span>
+          <span className="ver">wireframe · supply_chain_demo.yaml · v0.3-draft</span>
+        </div>
+        <div className="branch-badge">
+          branch: <b>feat/coman-transfer</b> · <span className="diff-count">+2 ~1</span>
+        </div>
+        <div className="screen-tabs">
+          <button className={screen === 1 ? 'active' : ''} onClick={() => setScreen(1)}><span className="num">1</span>structure</button>
+          <button className={screen === 2 ? 'active' : ''} onClick={() => setScreen(2)}><span className="num">2</span>cascade</button>
+          <button className={screen === 3 ? 'active' : ''} onClick={() => setScreen(3)}><span className="num">3</span>authoring</button>
+          <button className={screen === 4 ? 'active' : ''} onClick={() => setScreen(4)}><span className="num">4</span>fsm detail</button>
+        </div>
+      </header>
+      <main className={`screen ${screen === 1 ? 'active' : ''}`} data-screen-label={`01 structure · variant ${variant}`}>
+        {screen === 1 && <StructureScreen selection={selection} onSelect={handleSelect} breadcrumb={breadcrumb} onNavigate={navigate} variant={variant} setVariant={setVariant}/>}
+      </main>
+      <main className={`screen ${screen === 2 ? 'active' : ''}`} data-screen-label="02 cascade">
+        {screen === 2 && <CascadeScreen selection={selection} onSelect={handleSelect} breadcrumb={breadcrumb} onNavigate={navigate}/>}
+      </main>
+      <main className={`screen ${screen === 3 ? 'active' : ''}`} data-screen-label="03 authoring">
+        {screen === 3 && <AuthoringScreen selection={selection} onSelect={handleSelect} breadcrumb={breadcrumb} onNavigate={navigate}/>}
+      </main>
+      <main className={`screen ${screen === 4 ? 'active' : ''}`} data-screen-label="04 fsm detail">
+        {screen === 4 && <FSMScreen selection={selection} onSelect={handleSelect} breadcrumb={breadcrumb} onNavigate={navigate}/>}
+      </main>
+    </div>
+  );
+}
+window.App = App;
+
+const waitForDeps = () => {
+  const root = document.getElementById('root');
+  if (root && window.StructureScreen && window.CascadeScreen && window.AuthoringScreen && window.FSMScreen && window.SketchyFilters && window.ContextPanel) {
+    ReactDOM.createRoot(root).render(<App/>);
+  } else {
+    setTimeout(waitForDeps, 40);
+  }
+};
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', waitForDeps);
+} else {
+  waitForDeps();
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+/*
+ * Typography tokens — JetBrains Mono for all text. The Claude Design
+ * mockup's Caveat / Shadows Into Light accents were tool flourish, not a
+ * design choice; the real editor uses professional mono throughout.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}

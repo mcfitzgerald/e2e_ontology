@@ -1,0 +1,83 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.app-canvas-with-rail {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* PanelGroup children. The Panel component renders a <div> with data-panel-id;
+ * we just need the outer children to stretch and clip correctly. */
+.app-canvas-panel,
+.app-rail-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Resize handle — a 6px vertical strip with a 1.5px ink rule. On hover the
+ * stripe widens slightly so the affordance is visible without shifting
+ * layout. Matches the app's paper/ink treatment. */
+.app-resize-handle {
+  flex-shrink: 0;
+  width: 6px;
+  background: var(--paper);
+  border-left: 1.5px solid var(--ink);
+  border-right: 1.5px solid transparent;
+  cursor: col-resize;
+  position: relative;
+  transition: background 120ms ease;
+}
+.app-resize-handle:hover,
+.app-resize-handle[data-resize-handle-active] {
+  background: var(--paper-dark);
+}
+.app-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  margin-left: -1px;
+  margin-top: -14px;
+  background: var(--ink-muted);
+  opacity: 0.5;
+  border-radius: 1px;
+}
+.app-resize-handle:hover::after {
+  opacity: 1;
+}
+
+.status-pane {
+  padding: 48px;
+  max-width: 760px;
+  color: var(--ink);
+}
+.status-pane h2 {
+  margin-top: 0;
+  color: var(--axiom-blocking);
+}
+.status-pane code {
+  font-family: var(--font-mono);
+  background: var(--paper-dark);
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--ink-muted);
+  font-size: 11px;
+  display: inline-block;
+  word-break: break-all;
+}

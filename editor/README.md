@@ -1,0 +1,54 @@
+# Ontology Editor
+
+A graph-first editor and explainer for the supply-chain ontology. Primary user: the ontology author, for R&D and walking the team through the model.
+
+The editor renders live state from `supply_chain_demo.yaml` via `exploder.load_ontology()` — no data duplication, no drift.
+
+## Status
+
+MVP complete on branch `feat/editor-frontend`, ready to merge. Three React Flow screens (Structure swimlane / Cascade / FSM detail) plus ambient diff gutters, context panel with relational navigation, resizable rails, keyboard shortcuts (`g` / `c` / `f` / `esc`), and a live `supply_chain_demo.yaml` data path through the FastAPI backend.
+
+Next directions (not yet picked): filter rail · authoring overlay (Screen 3) + write-through API · orchestrator-side read API (design draft §12).
+
+Design intent: [`reference/ontology_editor_design_brief.md`](../reference/ontology_editor_design_brief.md).
+Visual spec: [`editor/design_reference/wireframe.html`](design_reference/wireframe.html).
+
+## Layout
+
+```
+editor/
+  README.md                    ← this file
+  GLOSSARY.md                  ← vocabulary reference for ontology + editor terms
+  design_reference/            ← Claude Design mockup, reference-only
+  parity_reviews/              ← historical per-screen parity memos (01–05)
+  frontend/                    ← React + Vite + TypeScript SPA
+  backend/                     ← FastAPI wrapping exploder.load_ontology()
+```
+
+## Running locally
+
+You'll need two shells.
+
+### Backend
+
+```bash
+cd editor/backend
+uv run --with linkml --with pyyaml --with pydantic --with fastapi --with uvicorn \
+  uvicorn main:app --reload --port 8787
+```
+
+Serves `/api/health`, `/api/ontology`, `/api/diff` on `http://localhost:8787`.
+
+### Frontend
+
+```bash
+cd editor/frontend
+npm install              # one-time
+npm run dev
+```
+
+Vite serves on `http://localhost:5173` (or the next open port) and proxies `/api/*` to the backend.
+
+### First-time smoke check
+
+With both running, open `http://localhost:5173`. You should see the swimlane graph populated from `supply_chain_demo.yaml`. If the graph is empty, check that the backend started and that `/api/ontology` returns JSON.
