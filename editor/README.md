@@ -6,7 +6,9 @@ The editor renders live state from `supply_chain_demo.yaml` via `exploder.load_o
 
 ## Status
 
-Phase 0 scaffolding. Screen 1 (role swimlane graph) is the immediate next milestone.
+MVP complete on branch `feat/editor-frontend`, ready to merge. Three React Flow screens (Structure swimlane / Cascade / FSM detail) plus ambient diff gutters, context panel with relational navigation, resizable rails, keyboard shortcuts (`g` / `c` / `f` / `esc`), and a live `supply_chain_demo.yaml` data path through the FastAPI backend.
+
+Next directions (not yet picked): filter rail · authoring overlay (Screen 3) + write-through API · orchestrator-side read API (design draft §12).
 
 Design intent: [`reference/ontology_editor_design_brief.md`](../reference/ontology_editor_design_brief.md).
 Visual spec: [`editor/design_reference/wireframe.html`](design_reference/wireframe.html).

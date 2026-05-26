@@ -6,6 +6,76 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-05-25 — Phase I.3 Editor, Phase 4b (Commit E): interaction polish + AGENTS.md retirement
+
+- **Added.** `editor/frontend/src/hooks/useKeyboardShortcuts.ts` wired from `App.tsx`. `g` / `c` / `f` switch Structure / Cascade / FSM (mutates `useScreen`); `esc` clears selection (`useOntology.navigate(null)`); `/` is a no-op + `console.debug` that forward-keeps the binding for the eventual filter rail / search input. Listener skips when focus is inside `<input>` / `<select>` / `<textarea>` / `contentEditable` so the cascade picker, FSM picker, and depth slider still receive their keys.
+- **Changed.** FSM `minZoom` 0.4 → 0.3 to align with Structure and Cascade. `fitView`-on-mount-only and hover-to-dim were already consistent across the three screens — verified, no change needed.
+- **Removed.** `editor/AGENTS.md`. The file documented a parity-memo-per-screen convention plus stack / scope guardrails, but Claude Code only auto-loads `CLAUDE.md`, not `AGENTS.md` — so the rules sat there unsurfaced. The parity convention had drifted to verbal sign-off in practice (memos 06 / 07 were never written). Substantive content either lives in root `CLAUDE.md` (frontend-design / context7 / JetBrains-Mono-only) or is baked into committed code. Four stale references cleaned in `editor/README.md`, `store/screen.ts`, `components/ContextPanel.css`, `components/PanelDiff.tsx`.
+- **Tracked.** `reference/resume_note_5-10-26.md` now in git, with the "Active plan" pointer repaired to `claude_plans/linear-pondering-platypus.md` (original plan file was lost; reconstructed earlier today from commit messages + this resume note).
+
+### 2026-05-10 — Phase I.3 Editor, Phase 4b (Commit D): FSM detail view on React Flow
+
+- **Added.** Real implementation of Screen 4 (FSM detail), replacing the Phase 4a stub. Horizontal lifecycle diagram via dagre LR layout with HTML custom state nodes and smoothstep transition edges.
+- **Added.** `screens/FSM/StateNode.tsx` — HTML custom node. Initial states wear a small ▸ entry-arrow glyph hanging off the left edge; terminal states get a concentric outer ring (the automata accept-state double-rule). Tag chips (INITIAL / TERMINAL) inside the box for screen-readability.
+- **Added.** `screens/FSM/TransitionEdge.tsx` — smoothstep paths (read better than bezier on strict-LR layout). HTML labels via `EdgeLabelRenderer` carry both `on <trigger>` and `⊢ <guard>` chips. Both interactive: trigger opens EventPanel, guard opens AxiomPanel. Unresolved guards render greyed + strikethrough. Labels at z-index 12 (above nodes); hover bumps to 50 with a soft drop-shadow.
+- **Added.** `flowOwningAxiom(data, axiomName)` in `components/panels/helpers.ts`. Resolves an axiom name to its owning flow regardless of which flow declares it. Load-bearing for the canonical case: `request_production` and `re_request_production` both govern `ProductionRequestLifecycle`; the guard `line_capacity_not_exceeded` lives on one but is referenced by the other's FSM. Without this, guard click-through breaks on shared lifecycles.
+- **Added.** FSM screen left rail (resizable, persisted via `autoSaveId="editor.layout.fsm"`): FSM picker, summary block, full transitions list with clickable triggers and guard buttons, "Flows sharing this lifecycle (N)" chip list, why-this-view note explaining the multi-flow guard pattern.
+- **Deferred.** Per-commit parity memo `editor/parity_reviews/07_fsm_detail.md` not written — verbal sign-off only. The drift is later acknowledged and the convention retired at Commit E.
+
+### 2026-05-09 — Phase I.3 Editor: UX polish — "llm prompt hint" → "llm context" + GLOSSARY
+
+- **Changed.** ContextPanel UI label "llm prompt hint" renamed to "llm context" in FlowPanel, RolePanel, EventPanel. The underlying data field stays `llm_prompt_hint` (ontology truth in `scont_meta.yaml`); only the display label changes. All three constructs carry a single string used as agent context, so one general label suffices — no sub-typing in the data warrants disambiguation in the UI.
+- **Added.** `editor/GLOSSARY.md` — vocabulary reference covering core constructs (role / flow / event / axiom / FSM / entity), flow vocabulary (source / target / kind / quantum / trigger / lifecycle / returns / axiom-trip / on_failure_route_to), visual + editor terms (domain / swimlane / boundary role / depth / focus neighborhood / diff gutter / branch badge / HITL), card chrome (INFO / axiom dot / kind pill / tint bands), diff vocabulary, reasoning patterns (Mode 1 hard gate / Mode 2 context assembly), and a "where things live" file map.
+
+### 2026-05-09 — Phase I.3 Editor, Phase 4b (Commit C): Cascade view on React Flow
+
+- **Changed.** Cascade screen ported from hand-rolled SVG to `@xyflow/react`. Trigger was the "via label" overlap on canonical cascades like `submit_promo_plan` — labels rendered on top of cards and each other at depth. React Flow's `EdgeLabelRenderer` places labels at true edge midpoints; HTML pills with a paper background replace the hand-measured bib rects.
+- **Added.** `screens/Cascade/FlowOccurrenceNode.tsx` — HTML custom node with source / target tint bands, kind pill, axiom dot, dim / selected states. `screens/Cascade/CascadeEdges.tsx` — `EventEdge` + `AxiomTripEdge` using `getBezierPath` + `EdgeLabelRenderer`. `screens/Cascade/CascadeBackground.tsx` — `ViewportPortal`'d swimlanes + depth column headers / dividers; pans and zooms with content.
+- **Changed.** Via labels are hover / focus-only — hidden by default, surfaced when the edge is hovered directly (24px hit zone) or sits in the focus neighborhood (an endpoint is hovered or selected). Closes the original clutter problem.
+- **Carried forward.** `traversal.ts` unchanged (pure BFS preserved). `layout.ts` exposes `COL_WIDTH`; depth × domain bucket otherwise unchanged.
+- **Deferred.** Per-commit parity memo `editor/parity_reviews/06_rf_cascade.md` not written — verbal sign-off only.
+
+### 2026-04-19 — Phase I.3 Editor, Phase 4b (Commit B): Structure view on React Flow
+
+- **Changed.** Structure screen ported from hand-rolled SVG to `@xyflow/react@12`. Visual grammar and interaction semantics preserved from Phase 1 + Phase 3; rendering substrate swap unlocks pan / zoom and hover-to-dim that had been deferred from Phase 1.
+- **Added.** `screens/Structure/RoleNode.tsx` — HTML custom node. Role card chrome (ink border, cream fill, 170×36 min, boundary dash, selected fill + bold, dim at 0.28). Hidden source / target Handles for edge attachment points. HITL badge and diff gutter as sibling DOM elements inside the role card.
+- **Added.** `screens/Structure/FlowEdge.tsx` — SVG custom edge via `BaseEdge`. Quadratic bezier with perpendicular bundle-index offset so parallel flows between the same role pair fan out. Kind-specific stroke classes preserved (`material` / `information` / `cash` with cash double-line). Diff underlay 7px. Axiom dot via `EdgeLabelRenderer`.
+- **Added.** `screens/Structure/SwimlaneBackground.tsx` — domain tint bands + lane reorder ↑↓ buttons rendered inside `ViewportPortal` so they pan / zoom with nodes. Forces `.react-flow__viewport-portal { z-index: -1 }` so the portal sits below edges / nodes (default DOM order puts it on top).
+- **Changed.** `screens/Structure/index.tsx` rewritten as `ReactFlowProvider + StructureInner`. Layout still computes via dagre + forced-Y swimlane algorithm; positions shifted to top-left corners (React Flow's coord convention) before emitting Node records. `edgeGeometry.ts` simplified to return `{flow, bundleIndex, bundleTotal}` only; path math moves into `FlowEdge`.
+- **Removed.** `screens/Structure/SwimlaneGraph.tsx` (superseded by React Flow assembly).
+- **Unlocked.** Pan on empty-canvas drag; scroll-zoom bounded 0.3–2; auto `fitView` on mount with 12% padding; hover-to-dim (focus neighborhood at 0.28 opacity for non-neighbors); `<Controls>` panel bottom-right.
+- **Added.** `editor/parity_reviews/05_rf_structure.md` — Phase 4b Commit B parity memo (the last memo before the convention drifted to verbal sign-off).
+
+### 2026-04-19 — Phase I.3 Editor, Phase 4b (Commit A): resizable rails + state persistence
+
+- **Added.** `react-resizable-panels@^2` pinned (not v4 — v4 introduced a breaking API rename `Group` / `Separator` instead of `PanelGroup` / `PanelResizeHandle` and moved persistence to a `useDefaultLayout` hook; v2 is the widely-documented API and fits the codebase shape).
+- **Added.** Outer `PanelGroup` in `App.tsx` between `ScreenRouter` and `ContextPanel`. Canvas Panel `defaultSize 72, minSize 40`; Rail Panel `defaultSize 28, minSize 18, maxSize 50, collapsible`. Widths persist via `autoSaveId="editor.layout.outer"`. Rail collapse state controlled from `App` via `useLocalToggle` and synced to the imperative panel handle; the existing `›` / `‹` affordance in `ContextPanel` now drives controlled props instead of owning state. Ink vertical splitter (6px, 2px grip, darkens on hover / active drag).
+- **Added.** Cascade nested `PanelGroup` — 22 / 78 rail / canvas split, `autoSaveId="editor.layout.cascade"`. Independently resizable from the outer layout.
+- **Added.** `useScreen` reads initial screen from `localStorage["editor.screen"]` and writes on `setScreen`. Reload lands the user back on the tab they were using rather than always snapping to Structure.
+- **Fixed.** Cascade SVG sizing regression — dropped hardcoded `width` / `height` attrs that were overriding CSS and preventing the canvas from resizing when the outer rail moved. `preserveAspectRatio` switched to `xMidYMid` so narrow cascades center.
+- **Architectural note.** Foundation commit for the React Flow port that follows (Commits B / C / D / E). Gives immediate ergonomic win without touching any canvas rendering.
+
+### 2026-04-19 — Phase I.3 Editor, Phase 4a: Cascade view (hand SVG) + screen router
+
+- **Added.** Screen 2 (Cascade) — traces a starting flow downstream through the causal chain. Events observed by a flow's target role trigger children at depth+1, and blocking axioms with `on_failure_route_to` contribute recovery branches.
+- **Added.** Screen routing harness — `store/screen.ts` Zustand slice for current screen, kept off `store/ontology.ts` so screen switching doesn't disturb selection or breadcrumb stack. `AppHeader` tabs enable structure / cascade / fsm; authoring stays disabled with a "deferred — mockup only" tooltip per the scope guardrail.
+- **Added.** Cascade traversal — BFS over flow-level edges with a first-touch seen-set + `hardCap=80`. Two edge kinds: event-mediated (`observed_by → trigger_event`) and axiom-trip (blocking + `on_failure_route_to`). Axiom-trip is enqueued first so the axiom edge wins the seen-set race when both paths reach the same target — that's the edge the view exists to surface.
+- **Added.** Cascade layout (hand SVG, pre-React-Flow): Y = domain swimlane matching Structure's order; X = depth column. Multi-flow cells stack vertically. Flow-occurrence cards carry source + target domain tint bands, flow name, route, kind glyph, axiom severity dot. Parent arrows: bezier from right-edge to left-edge; event edges ink-soft solid, axiom-trip edges axiom-blocking dashed with a `⊥ <axiom>` label.
+- **Added.** `screens/FSM/` stub so the router type-checks — real FSM implementation follows in Phase 4b Commit D.
+- **Added.** `editor/parity_reviews/04_cascade.md` — parity memo.
+- **Known issue at sign-off.** When multiple parent arrows converge on similar midpoints, the via-labels overlap even with bibs — the trigger for the Phase 4b Commit C port to React Flow.
+
+### 2026-04-18 — Phase I.3 Editor, Phase 3: ambient diff gutters + branch badge
+
+- **Added.** Backend `GET /api/diff?base=<ref>` wrapping `exploder._resolve_diff_inputs` + `compute_delta`; returns a per-kind `{added, removed, changed}` payload with field-level dotted paths. Chdirs to repo root for the call so `git archive` ships the full tree. `GET /api/git-status` returns branch, head sha, ahead / behind, dirty; each field degrades independently for detached HEAD / no upstream / non-git checkouts.
+- **Added.** Zustand `diff` slice with O(1) per-kind status + change indices, loaded on mount and refreshed on window focus (no polling).
+- **Added.** `BranchBadge` in app header — branch · @sha · `+N ~M -K`, color-coded.
+- **Added.** Diff flag on role nodes — bright red tab with white `~` glyph for changed, green `+` for added, pulled outside the box so it can't be mistaken for box styling. Diff underlay on flow edges — 7px semi-transparent stroke under the kind-styled edge for added / changed flows.
+- **Added.** `RemovedSinceHead` banner above the canvas listing elements that exist in base ref but not working copy (no layout coords for them).
+- **Added.** `PanelDiff` banner above context-panel body — `+ added` / `~ N fields modified` / `− removed` since base, with inline ins / del field rows.
+- **Polish during review.** Legend pill + expanded panel anchored flush to bottom-left corner so both states read as canvas-frame tabs, not floating widgets. Axiom badges on edges shrunk to plain colored dots (per brief: "small dot at edge midpoint"), dropping the mockup's `!` glyph flourish.
+- **Added.** `editor/parity_reviews/03_diff_gutters.md` — Phase 3 parity memo.
+
 ### 2026-04-18 — Phase I.3 Editor, Phase 2: context panel + relational navigation
 
 - **Added.** Right-rail **ContextPanel** (360px, always mounted, collapsible to a 26px vertical strip) backed by a **Selection history stack** in the Zustand store. `navigate()` pushes, `back()` pops, `jumpTo(depth)` truncates. Clicking any chip pushes the breadcrumb.
