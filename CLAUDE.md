@@ -54,7 +54,8 @@ When LinkML ships native annotation validation, `scont_meta.yaml` slots straight
 | `plan_of_attack.md` | Phased build plan. Phase 0 ✅ (done), Phase 1 (Ontology Service + renderer in this repo), Phase 2 (first agent in new orchestrator repo), …, Phase 7 (MCP), Phase 8 (UI). |
 | `exploder.py` | Parser + object model + cross-reference validator + query API + CLI. Built on `linkml_runtime.SchemaView`. |
 | `editor/` | Visual ontology editor / explorer (Phase I.3 MVP). Front door for ontology authors and visual stakeholders. |
-| `tests/` | pytest suite (160 tests). `test_bodies` (Pydantic shape validation), `test_loader` (parsing), `test_query_api`, `test_integration` (end-to-end counts + invariants), `test_diff`, `test_scaffolding`, `test_world_state` (fixture structure + conflict math). |
+| `ontology_service/` | Phase 1 deliverable. Read-only role-scoped query API (`OntologyService`) over a loaded `Ontology`, plus a typed `RoleView` snapshot and three format adapters (`as_agent_prompt`, `as_markdown`, `as_json`). Substrate for the agent runtime (Phase 2) and the MCP front door (Phase 7). |
+| `tests/` | pytest suite (192 tests). `test_bodies` (Pydantic shape validation), `test_loader` (parsing), `test_query_api`, `test_integration` (end-to-end counts + invariants), `test_diff`, `test_scaffolding`, `test_world_state` (fixture structure + conflict math), `test_ontology_service` + `test_role_view_render` (Phase 1; with snapshots under `tests/snapshots/`). |
 | `.linkmllint.yaml` | linkml-lint config. `standard_naming` is disabled because scont-tagged classes use snake_case by convention. |
 
 ## Commands

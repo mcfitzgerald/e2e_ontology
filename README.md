@@ -6,7 +6,7 @@ A supply chain ontology that sits in an agent orchestration layer, providing the
 
 The ontology layer is in place and validated. Strict validation is clean (17 entities, 9 roles, 8 events, 4 state machines, 15 flows, 5 enums); the LLM-reasoning de-risking spike passed cleanly; the editor / visualizer shipped (Phase I.3); the promo whiplash demo narrative is wired into the YAML.
 
-The agent system that will consume this ontology is designed but not yet built. `agent_system_design.md` captures the architectural intent (generic ADK agents instantiated from the ontology, two-layer orchestrator with swappable durability backend, MCP as the front door for analysis agents and knowledge workers). `plan_of_attack.md` is the phased build plan. Phase 0 (foundations: design rule into `CONTRIBUTING.md` + world-state fixture) is complete. Phase 1 (Ontology Service + prompt renderer, in this repo) is next.
+The agent system that will consume this ontology is designed but not yet built. `agent_system_design.md` captures the architectural intent (generic ADK agents instantiated from the ontology, two-layer orchestrator with swappable durability backend, MCP as the front door for analysis agents and knowledge workers). `plan_of_attack.md` is the phased build plan. Phase 0 (foundations: design rule into `CONTRIBUTING.md` + world-state fixture) and Phase 1 (Ontology Service + format-agnostic role-view renderer in `ontology_service/`) are complete. Phase 2 (first transactional agent in a new orchestrator repo) is next; Phase 7 (MCP server over the Ontology Service) can start in parallel.
 
 ## Authoritative reading order
 
@@ -38,7 +38,8 @@ Before non-trivial work, read in this order:
 | `world_state.yaml` | Demo world fixture (SKUs, plants/lines, retailers, commitments, promos, baseline schedule). Validated by `tests/test_world_state.py`. |
 | `exploder.py` | Parser, object model, cross-reference validator, query API, CLI. |
 | `editor/` | Visual ontology editor / explorer (Phase I.3 MVP). |
-| `tests/` | pytest suite (160 tests covering bodies, loader, query API, integration, diff, scaffolding, world state). |
+| `ontology_service/` | Read-only role-scoped query API + format-agnostic `RoleView` render (`as_agent_prompt` / `as_markdown` / `as_json`). Phase 1 deliverable; substrate for the agent runtime (Phase 2) and the MCP front door (Phase 7). |
+| `tests/` | pytest suite (192 tests; adds ontology-service unit tests + role-view snapshots over the original 160). |
 | `docs/` | Generated markdown + Mermaid documentation (re-run `exploder doc` after ontology changes). |
 | `reference/` | Older session notes and the prior `pcg.yaml` virtual-twin ontology for reference. |
 
@@ -87,7 +88,7 @@ Ask questions about handoffs, axioms, and recovery routing. See `initial_design_
 See `plan_of_attack.md` for the phased plan. In short:
 
 1. **Phase 0** ✅ — design rule into `CONTRIBUTING.md`; world-state fixture.
-2. **Phase 1** — Ontology Service + prompt renderer (in this repo, branch).
+2. **Phase 1** ✅ — Ontology Service + format-agnostic role-view renderer (`ontology_service/`).
 3. **Phase 2** — First transactional agent in a new orchestrator repo.
 4. **Phases 3-6** — Multi-role happy path; deterministic backbone; Playbook + Scene 5; full demo.
 5. **Phase 7** — MCP front door (can start after Phase 1).
