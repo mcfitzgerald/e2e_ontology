@@ -12,12 +12,15 @@ Not a framework, not a library, not a runtime. The ontology is the product.
 
 Before making non-trivial changes, read in this order:
 
-1. `initial_design_draft.md` — the authoritative design document. §3 (meta-model), §6 (LinkML extension pattern), §11 (spike results), §12 (hot/cold path context management). Long but load-bearing.
+1. `initial_design_draft.md` — authoritative design for the ontology layer. §3 (meta-model), §6 (LinkML extension pattern), §11 (spike results), §12 (hot/cold path context management). Long but load-bearing.
 2. `ontology_primer.md` — how to read the ontology. Short, prepended to LLM prompts.
-3. `CONTRIBUTING.md` — authoring process, templates, command set.
-4. `CHANGELOG.md` — session-by-session deltas. The most recent entry always describes current state.
+3. `agent_system_design.md` — design of the agent system that consumes the ontology. §2 (the world-vs-policy design rule), §4 (orchestrator landscape and where we sit), §5 (architecture overview + ADK alignment), §6 (new ontology constructs: Playbook, Tool), §15 (consumer surfaces and MCP front door).
+4. `plan_of_attack.md` — phased build plan with definitions-of-done. Phase 0 done; Phase 1 is next.
+5. `demo_narrative.md` — promo whiplash narrative; the demo proof point.
+6. `CONTRIBUTING.md` — authoring process, templates, command set, and the §2 design rule.
+7. `CHANGELOG.md` — session-by-session deltas. The most recent entry always describes current state.
 
-The README is lighter and slightly stale; prefer the four above.
+`README.md` is the orientation surface; the docs above are authoritative.
 
 ## Architecture: the LinkML extension pattern
 
@@ -46,8 +49,12 @@ When LinkML ships native annotation validation, `scont_meta.yaml` slots straight
 | `scont_bodies.py` | Auto-generated Pydantic models from `scont_meta.yaml`. Regenerate via `exploder.py regen-bodies`. |
 | `core.yaml` | Meta-class documentation shells — `Role`, `Event`, `Flow` (abstract) + `InformationFlow`/`MaterialFlow`/`CashFlow`, `StateMachine`. No enforced slots; just canonical docs. Imported by content schemas. |
 | `supply_chain_demo.yaml` | Current concrete content (~1300 lines). Promo whiplash narrative spanning commercial/demand/supply_netops/manufacturing/logistics. |
+| `world_state.yaml` | Demo world fixture (SKUs, plants/lines, retailers, commitments, promos, baseline schedule, clock). Validates against `supply_chain_demo.yaml`'s entity classes; the canonical NJ-L1 capacity conflict (6500/5000) is encoded here. |
+| `agent_system_design.md` | Design intent for the agent runtime that consumes the ontology. World-vs-policy rule (§2), orchestrator landscape (§4), architecture (§5), Playbook + Tool meta-constructs to add (§6), MCP front door (§15). |
+| `plan_of_attack.md` | Phased build plan. Phase 0 ✅ (done), Phase 1 (Ontology Service + renderer in this repo), Phase 2 (first agent in new orchestrator repo), …, Phase 7 (MCP), Phase 8 (UI). |
 | `exploder.py` | Parser + object model + cross-reference validator + query API + CLI. Built on `linkml_runtime.SchemaView`. |
-| `tests/` | pytest suite (78 tests). `test_bodies` (Pydantic shape validation), `test_loader` (parsing), `test_query_api`, `test_integration` (end-to-end counts + specific invariants on the live demo YAML). |
+| `editor/` | Visual ontology editor / explorer (Phase I.3 MVP). Front door for ontology authors and visual stakeholders. |
+| `tests/` | pytest suite (160 tests). `test_bodies` (Pydantic shape validation), `test_loader` (parsing), `test_query_api`, `test_integration` (end-to-end counts + invariants), `test_diff`, `test_scaffolding`, `test_world_state` (fixture structure + conflict math). |
 | `.linkmllint.yaml` | linkml-lint config. `standard_naming` is disabled because scont-tagged classes use snake_case by convention. |
 
 ## Commands
@@ -104,9 +111,9 @@ The CLI subcommand set: `validate`, `summary`, `inspect`, `query`, `doc`, `regen
 
 The user is a supply chain technologist. Expects honest pushback and debate, not deference. Saved feedback from the memory layer worth surfacing here:
 
-- **Keep ontology language generic.** No ADK, LangGraph, or any orchestration-framework-specific references in the ontology content or primer.
-- **HITL belongs in the orchestrator, not the ontology.** Ontology declares what *may* need humans + context to surface the need; orchestrator owns thresholds and mechanisms. Don't let ontology fields specify runtime policy.
-- **`llm_prompt_hint` governance is a future concern.** Watch for it becoming a generic catch-all bucket; don't try to formalize it during the POC.
+- **The world-vs-policy rule is durable.** The ontology models the world and the action vocabulary, never the decision policy (`CONTRIBUTING.md` top section; `agent_system_design.md` §2). Reject `prefer:` / `priority_order:` / `fallback_chain:` / `if X then Y` style additions at PR time. HITL belonging to the orchestrator is one specific case of this broader rule.
+- **Keep ontology language generic.** No ADK, LangGraph, or any orchestration-framework-specific references in the ontology content or primer. Agent-system-side framework references live in `agent_system_design.md`, not in the YAML or primer.
+- **`llm_prompt_hint` is being structurally absorbed.** Playbook + Tool meta-constructs (planned for `plan_of_attack.md` Phase 5) take the load-bearing content out of hints. After they land, hints become commentary; phrases like "fan out," "always fires," "when X then Y" in a hint signal that a Playbook should replace it.
 
 ## Tooling conventions
 

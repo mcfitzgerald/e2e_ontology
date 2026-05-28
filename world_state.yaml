@@ -1,0 +1,319 @@
+# ============================================================================
+# world_state.yaml — Demo world fixture for the promo whiplash narrative
+# ============================================================================
+#
+# Contains:
+#   - Instances of ontology entity classes (SKU, Supplier, ProductionLine,
+#     RetailerCommitment, TradePromotion). Each list item is shaped to be
+#     an instance of the named class from supply_chain_demo.yaml.
+#   - Supplementary world state (production_schedule, clock) that the
+#     orchestrator's world-state layer holds but the ontology does not model
+#     as a class. See agent_system_design.md §9 ("State and transactions")
+#     and plan_of_attack.md Phase 0.2.
+#
+# Dimensions (per plan_of_attack.md Phase 0.2):
+#   2 plants × 2 lines = 4 production_lines
+#   5 skus
+#   3 retailers (used by commitments/promos; not modeled as a class)
+#   6 suppliers
+#   8 retailer_commitments
+#   2 trade_promotions
+#
+# Conflict math (Scene 4 / line_capacity_not_exceeded):
+#   NJ-L1 rated_weekly_capacity = 5000
+#   Baseline during promo window (week_start_day=140):
+#     TP-FLAG-6OZ:  1500   (existing)
+#     TP-SEC-6OZ:   2000   (Target commitment)
+#                  -----
+#                   3500   (70% load — fine baseline)
+#   With Walmart promo on TP-FLAG-6OZ at 3x uplift:
+#     TP-FLAG-6OZ:  4500   (1500 × 3)
+#     TP-SEC-6OZ:   2000
+#                  -----
+#                   6500   (130% — CONFLICT, shortfall 1500/week)
+#
+# Validation: tests/test_world_state.py validates entities against the schema
+# and checks the conflict math.
+
+# ----------------------------------------------------------------------------
+# Clock — "today" expressed as integer day-of-year (1-365)
+# ----------------------------------------------------------------------------
+# Promo lands at day 142 (~6 weeks out from today). Time-dependent axioms
+# (respect_lead_time) evaluate against this clock; demo scenarios may
+# override.
+
+clock:
+  today_day_of_year: 100
+
+# ----------------------------------------------------------------------------
+# SKUs — 5 finished goods, all oral care category
+# ----------------------------------------------------------------------------
+# TP-FLAG-6OZ is "Product A" (the promo target; Colgate-Total-style flagship).
+# TP-SEC-6OZ  is "Product B" (the SKU at risk when NJ-L1 jams).
+
+skus:
+  - sku_code: TP-FLAG-6OZ
+    name: "Flagship Toothpaste 6oz"
+    category: oral_care
+    unit_of_measure: each
+    active: true
+
+  - sku_code: TP-SEC-6OZ
+    name: "Secondary Toothpaste 6oz"
+    category: oral_care
+    unit_of_measure: each
+    active: true
+
+  - sku_code: TP-KIDS-3OZ
+    name: "Kids Toothpaste 3oz"
+    category: oral_care
+    unit_of_measure: each
+    active: true
+
+  - sku_code: TPB-WHIT-4OZ
+    name: "Whitening Toothpaste 4oz"
+    category: oral_care
+    unit_of_measure: each
+    active: true
+
+  - sku_code: MW-CLAS-500ML
+    name: "Classic Mouthwash 500ml"
+    category: oral_care
+    unit_of_measure: each
+    active: true
+
+# ----------------------------------------------------------------------------
+# Production Lines — 2 plants (NJ, CA) × 2 lines each
+# ----------------------------------------------------------------------------
+# NJ-L1 is the canonical shared line where TP-FLAG-6OZ and TP-SEC-6OZ
+# compete during the promo window. CA-L1 is the natural alternative
+# (different plant; would require schedule re-sequencing to absorb shifted
+# volume).
+
+production_lines:
+  - line_code: NJ-L1
+    plant_code: PLANT-NJ
+    rated_weekly_capacity: 5000
+    active: true
+
+  - line_code: NJ-L2
+    plant_code: PLANT-NJ
+    rated_weekly_capacity: 3500
+    active: true
+
+  - line_code: CA-L1
+    plant_code: PLANT-CA
+    rated_weekly_capacity: 4000
+    active: true
+
+  - line_code: CA-L2
+    plant_code: PLANT-CA
+    rated_weekly_capacity: 3000
+    active: true
+
+# ----------------------------------------------------------------------------
+# Suppliers — 6 raw-material suppliers
+# ----------------------------------------------------------------------------
+# Lead times span 7–28 days, which gives the respect_lead_time axiom
+# meaningful variation. Longest lead (SUP-MENTHOL-002, 28d) lets the
+# Scene-4-equivalent procurement infeasibility scenario fire on tight
+# required-by dates.
+
+suppliers:
+  - supplier_code: SUP-FLUORIDE-001
+    name: "Acme Fluoride Co."
+    country: US
+    lead_time_days: 14
+    active: true
+
+  - supplier_code: SUP-MENTHOL-002
+    name: "Greenleaf Menthol"
+    country: IN
+    lead_time_days: 28
+    active: true
+
+  - supplier_code: SUP-TUBE-003
+    name: "Pacific Tube Manufacturing"
+    country: US
+    lead_time_days: 10
+    active: true
+
+  - supplier_code: SUP-CARTON-004
+    name: "Northeast Cartons LLC"
+    country: US
+    lead_time_days: 7
+    active: true
+
+  - supplier_code: SUP-XYLITOL-005
+    name: "Baltic Sweeteners"
+    country: FI
+    lead_time_days: 21
+    active: true
+
+  - supplier_code: SUP-PACK-006
+    name: "Quickform Packaging"
+    country: MX
+    lead_time_days: 12
+    active: true
+
+# ----------------------------------------------------------------------------
+# Retailer Commitments — 8 standing replenishment commitments
+# ----------------------------------------------------------------------------
+# Key narrative commitment: COM-TGT-SEC-Q2 (Target on TP-SEC-6OZ, MABD 130).
+# This is the at-risk commitment when the Walmart promo on TP-FLAG-6OZ jams
+# NJ-L1. OTIF penalty = 3% × shipment value.
+
+retailer_commitments:
+  - commitment_id: COM-WMT-FLAG-Q2
+    retailer: WALMART
+    sku: TP-FLAG-6OZ
+    committed_volume: 12000
+    mabd_day: 135
+    otif_penalty_rate: 0.03
+
+  - commitment_id: COM-TGT-SEC-Q2
+    retailer: TARGET
+    sku: TP-SEC-6OZ
+    committed_volume: 8000
+    mabd_day: 130
+    otif_penalty_rate: 0.03
+
+  - commitment_id: COM-TGT-FLAG-Q2
+    retailer: TARGET
+    sku: TP-FLAG-6OZ
+    committed_volume: 5000
+    mabd_day: 138
+    otif_penalty_rate: 0.03
+
+  - commitment_id: COM-KRG-FLAG-Q2
+    retailer: KROGER
+    sku: TP-FLAG-6OZ
+    committed_volume: 4000
+    mabd_day: 140
+    otif_penalty_rate: 0.025
+
+  - commitment_id: COM-WMT-MW-Q2
+    retailer: WALMART
+    sku: MW-CLAS-500ML
+    committed_volume: 6000
+    mabd_day: 145
+    otif_penalty_rate: 0.03
+
+  - commitment_id: COM-TGT-WHIT-Q2
+    retailer: TARGET
+    sku: TPB-WHIT-4OZ
+    committed_volume: 3000
+    mabd_day: 145
+    otif_penalty_rate: 0.03
+
+  - commitment_id: COM-KRG-SEC-Q2
+    retailer: KROGER
+    sku: TP-SEC-6OZ
+    committed_volume: 2500
+    mabd_day: 132
+    otif_penalty_rate: 0.025
+
+  - commitment_id: COM-WMT-KIDS-Q2
+    retailer: WALMART
+    sku: TP-KIDS-3OZ
+    committed_volume: 4500
+    mabd_day: 142
+    otif_penalty_rate: 0.03
+
+# ----------------------------------------------------------------------------
+# Trade Promotions — 2 in-flight
+# ----------------------------------------------------------------------------
+# PROMO-WMT-FLAG-2026Q2 is the demo's seed signal: aligned but not yet
+# committed (renegotiation viable per the viable_promo_renegotiation
+# criterion), 3x uplift on TP-FLAG-6OZ for two weeks starting day 142.
+#
+# PROMO-TGT-WHIT-2026Q2 is background: committed (renegotiation expensive),
+# 2x uplift on a different SKU (TPB-WHIT-4OZ — runs on CA-L1, not the
+# conflict line), so it does not interact with the demo's central conflict.
+
+trade_promotions:
+  - promo_id: PROMO-WMT-FLAG-2026Q2
+    sku: TP-FLAG-6OZ
+    retailer: WALMART
+    volume_uplift_factor: 3.0
+    promo_start_day: 142
+    promo_end_day: 156
+    commitment_status: aligned
+
+  - promo_id: PROMO-TGT-WHIT-2026Q2
+    sku: TPB-WHIT-4OZ
+    retailer: TARGET
+    volume_uplift_factor: 2.0
+    promo_start_day: 165
+    promo_end_day: 179
+    commitment_status: committed
+
+# ----------------------------------------------------------------------------
+# Production Schedule — supplementary world state (no ontology class)
+# ----------------------------------------------------------------------------
+# Baseline weekly production keyed by (line, sku, week_start_day). Drives
+# line_capacity_not_exceeded by giving the axiom evaluator the existing
+# load against which proposed production is summed.
+#
+# Covers two weeks in the conflict window (days 140-153, the promo's
+# production ramp). Without the promo, NJ-L1 runs at 3500/5000 (70%).
+# With the promo on TP-FLAG-6OZ at 3x, projected load is 6500/5000 (130%)
+# — the conflict that drives the demo.
+
+production_schedule:
+  # NJ-L1 — the shared toothpaste line; the canonical conflict surface
+  - line: NJ-L1
+    sku: TP-FLAG-6OZ
+    week_start_day: 140
+    units: 1500
+  - line: NJ-L1
+    sku: TP-SEC-6OZ
+    week_start_day: 140
+    units: 2000
+  - line: NJ-L1
+    sku: TP-FLAG-6OZ
+    week_start_day: 147
+    units: 1500
+  - line: NJ-L1
+    sku: TP-SEC-6OZ
+    week_start_day: 147
+    units: 2000
+
+  # NJ-L2 — mouthwash; no interaction with the demo conflict
+  - line: NJ-L2
+    sku: MW-CLAS-500ML
+    week_start_day: 140
+    units: 1800
+  - line: NJ-L2
+    sku: MW-CLAS-500ML
+    week_start_day: 147
+    units: 1800
+
+  # CA-L1 — alternative toothpaste capacity (relevant to internal-resequencing
+  # and shift_to_coman resolution paths)
+  - line: CA-L1
+    sku: TPB-WHIT-4OZ
+    week_start_day: 140
+    units: 1200
+  - line: CA-L1
+    sku: TP-KIDS-3OZ
+    week_start_day: 140
+    units: 1500
+  - line: CA-L1
+    sku: TPB-WHIT-4OZ
+    week_start_day: 147
+    units: 1200
+  - line: CA-L1
+    sku: TP-KIDS-3OZ
+    week_start_day: 147
+    units: 1500
+
+  # CA-L2 — mouthwash
+  - line: CA-L2
+    sku: MW-CLAS-500ML
+    week_start_day: 140
+    units: 1200
+  - line: CA-L2
+    sku: MW-CLAS-500ML
+    week_start_day: 147
+    units: 1200

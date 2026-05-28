@@ -2,6 +2,34 @@
 
 Authoring reference for this POC. Read `ontology_primer.md` first — it explains the constructs; this doc explains the process.
 
+## Design discipline — world model vs. decision policy
+
+The most important constraint on contributions:
+
+> **The ontology models the world and the action vocabulary. It never models the decision policy.**
+>
+> *World model:* what exists, what can happen, what state things can be in, what actions are available, what counts as viable for each path.
+>
+> *Decision policy:* what to do, in what order, under what conditions, with what preferences, with what fallback chain.
+
+The ontology stays a world model. Decision policy is resolved at runtime by the agent reasoning over context, not by structure in the YAML. Without this rule, the ontology drifts into a workflow definition language — at which point we have automation, not agentic coordination.
+
+**Authoring test.** Can the field be answered without referring to a runtime instance, a preference, or a ranking? If yes, it's world model — eligible for the ontology. If no, it's policy — push it back to the agent or the orchestrator.
+
+| Field | World or policy? | Verdict |
+|---|---|---|
+| `source_role`, `target_role`, `quantum` on a flow | World | ✅ In ontology |
+| `severity: blocking` on an axiom | World (this constraint must hold) | ✅ In ontology |
+| `is_boundary: true` on a role | World | ✅ In ontology |
+| `selects_one_of: [shift_to_coman, ...]` on a Playbook | World (these are the available paths) | ✅ In ontology |
+| Advisory axiom `viable_promo_renegotiation` | World (definition of viable) | ✅ In ontology |
+| Hypothetical: `prefer: shift_to_coman` | Policy (ranking) | ❌ Out |
+| Hypothetical: `if otif_penalty > X then prefer Y` | Policy (decision rule) | ❌ Out |
+| Hypothetical: `fallback_chain: [A, B, C]` | Policy (retry order) | ❌ Out |
+| Hypothetical: `priority_order: [...]` on context assembly | Policy (sequencing preference) | ❌ Out |
+
+Review every new field with this test before adding it. See `agent_system_design.md` §2 and §3 for the full rationale, including which moments of agency this rule is protecting.
+
 ## The authoring loop
 
 Every change flows through the exploder. The metaschema (`scont_meta.yaml`) defines what the annotation bodies must look like; `scont_bodies.py` is auto-generated from it; the exploder parses, validates, and cross-references. If the exploder says OK, the orchestrator team can consume the artifact.
@@ -254,3 +282,13 @@ Avoid:
 - Restating what the structure already says.
 - Generic advice ("handle errors gracefully").
 - Implementation specifics (ADK, LangGraph, etc.) — hints should be orchestrator-agnostic.
+
+## Notes for orchestrator-repo contributors
+
+The agent system that consumes this ontology lives in a separate repo (see `agent_system_design.md` §11 and `plan_of_attack.md` Phase 2). Three disciplines from `agent_system_design.md` §4.4 are durable build-time constraints there — surfaced here so contributors who touch both sides know the contract:
+
+1. **Idempotency keys on every flow firing** — `(source_role, target_role, quantum_id, sequence)`. Replaying the event log never double-fires downstream effects.
+2. **Commands → events (CQRS / event sourcing)** — agents emit *commands*; the orchestrator validates and writes *events*; downstream effects are driven from events, not commands. Enables replay.
+3. **Signals as the primitive for waits** — for query fan-out, human-in-the-loop, and process resumption across restarts.
+
+These are infrastructure-layer disciplines, not ontology contributions; they live in the orchestrator's own `CONTRIBUTING.md` once that repo exists.

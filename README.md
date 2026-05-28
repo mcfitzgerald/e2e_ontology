@@ -4,65 +4,91 @@ A supply chain ontology that sits in an agent orchestration layer, providing the
 
 ## State of the project
 
-Early POC. The de-risking spike has passed — LLM reasoning over the extension pattern works cleanly on the minimal demo slice. Foundation is in place and validated; ontology is being expanded toward a full demo narrative.
+The ontology layer is in place and validated. Strict validation is clean (17 entities, 9 roles, 8 events, 4 state machines, 15 flows, 5 enums); the LLM-reasoning de-risking spike passed cleanly; the editor / visualizer shipped (Phase I.3); the promo whiplash demo narrative is wired into the YAML.
 
-**Read `initial_design_draft.md` first.** It is the authoritative design document and captures everything the current state depends on, including the spike results and forward-looking work.
+The agent system that will consume this ontology is designed but not yet built. `agent_system_design.md` captures the architectural intent (generic ADK agents instantiated from the ontology, two-layer orchestrator with swappable durability backend, MCP as the front door for analysis agents and knowledge workers). `plan_of_attack.md` is the phased build plan. Phase 0 (foundations: design rule into `CONTRIBUTING.md` + world-state fixture) is complete. Phase 1 (Ontology Service + prompt renderer, in this repo) is next.
+
+## Authoritative reading order
+
+Before non-trivial work, read in this order:
+
+1. `initial_design_draft.md` — authoritative design for the ontology layer.
+2. `ontology_primer.md` — how to read the ontology (prepended to LLM prompts).
+3. `agent_system_design.md` — design of the agent system that consumes the ontology.
+4. `plan_of_attack.md` — phased build plan with definitions-of-done.
+5. `demo_narrative.md` — the promo whiplash scenario the system executes.
+6. `CONTRIBUTING.md` — authoring process and the durable design discipline.
+7. `CHANGELOG.md` — session-by-session deltas.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `initial_design_draft.md` | Authoritative design document. Start here. |
-| `core.yaml` | LinkML meta-class documentation shells (Role, Event, Flow, StateMachine). Imported by the demo. |
-| `supply_chain_demo.yaml` | Concrete demo ontology exercising demand→procurement, disruption→replan, and the downstream procurement→supplier transmission. |
-| `exploder.py` | Parser, object model, and cross-reference validator for the ontology. |
+| `initial_design_draft.md` | Authoritative design for the ontology layer. |
+| `agent_system_design.md` | Design of the agent system consuming the ontology. |
+| `plan_of_attack.md` | Phased build plan with definitions-of-done. |
 | `ontology_primer.md` | LLM context bootstrap — prepend to prompts that consume the ontology. |
+| `demo_narrative.md` | Promo whiplash narrative — the demo proof point. |
+| `CONTRIBUTING.md` | Authoring guide + the world-model-vs-decision-policy design rule. |
 | `CHANGELOG.md` | Session-by-session log of changes. |
-| `.gitignore` | Python, IDE, OS, and `.claude/` ignores. |
-| `reference/pcg.yaml` | Prior virtual-twin ontology — reference only, not POC content. |
+| `scont_meta.yaml` | Metaschema. Source of truth for annotation body shapes. |
+| `scont_bodies.py` | Auto-generated Pydantic models from `scont_meta.yaml` (commit both together). |
+| `core.yaml` | LinkML meta-class documentation shells (Role, Event, Flow, StateMachine). |
+| `supply_chain_demo.yaml` | Concrete demo ontology — promo whiplash narrative wired in. |
+| `world_state.yaml` | Demo world fixture (SKUs, plants/lines, retailers, commitments, promos, baseline schedule). Validated by `tests/test_world_state.py`. |
+| `exploder.py` | Parser, object model, cross-reference validator, query API, CLI. |
+| `editor/` | Visual ontology editor / explorer (Phase I.3 MVP). |
+| `tests/` | pytest suite (160 tests covering bodies, loader, query API, integration, diff, scaffolding, world state). |
+| `docs/` | Generated markdown + Mermaid documentation (re-run `exploder doc` after ontology changes). |
+| `reference/` | Older session notes and the prior `pcg.yaml` virtual-twin ontology for reference. |
 
 ## Quick start
 
-### Run the exploder
-
 ```bash
-uv run --with pyyaml python exploder.py supply_chain_demo.yaml
+# Strict validation (must pass clean before commit)
+uv run --with linkml --with pyyaml --with pydantic python exploder.py validate --strict supply_chain_demo.yaml
+
+# Full test suite
+uv run --with linkml --with pyyaml --with pydantic --with pytest python -m pytest tests/
+
+# Render docs (markdown + Mermaid diagrams)
+uv run --with linkml --with pyyaml --with pydantic python exploder.py doc supply_chain_demo.yaml --output docs/
+
+# Inspect one element
+python exploder.py inspect request_production
+
+# Ad-hoc query
+python exploder.py query source_role=supply_planning
 ```
 
-Prints a structured summary of the ontology's entities, roles, events, state machines, flows, and axioms. Fails with detailed errors if any cross-references are broken.
+See `CONTRIBUTING.md` for the full command reference and authoring workflow.
 
-### Test LLM reasoning over the ontology
+## Test LLM reasoning over the ontology
 
 Concatenate and feed to your LLM:
 
-1. `ontology_primer.md` — reader's guide, sets up navigation conventions
-2. `core.yaml` — meta-class definitions
-3. `supply_chain_demo.yaml` — the content under test
+1. `ontology_primer.md` — reader's guide, sets up navigation conventions.
+2. `core.yaml` — meta-class definitions.
+3. `supply_chain_demo.yaml` — the content under test.
 
 Ask questions about handoffs, axioms, and recovery routing. See `initial_design_draft.md` §10 for the three questions used in the de-risking spike and §11 for the results.
 
 ## Key design decisions at a glance
 
-- **LinkML as the host format**, extended via `instantiates:` tags as lightweight type discriminators (not LinkML 1.6's enforced metaclass extension mechanism).
+- **Ontology models the world and the action vocabulary; never the decision policy.** The durable design discipline (see `CONTRIBUTING.md` and `agent_system_design.md` §2). Without it, the ontology drifts into being a workflow engine in YAML — at which point we have automation, not agentic coordination.
+- **LinkML as host format**, extended via `instantiates:` tags as lightweight type discriminators. Not LinkML 1.6's enforced metaclass extension — but `scont_meta.yaml`'s class_uris align so the upgrade path is clean.
 - **Class-centric structure.** Everything is a LinkML class. Plain entities have no `instantiates:`; meta-typed constructs (Role / Event / Flow / StateMachine) carry the tag and put structured semantics in `annotations:` as JSON-in-folded-string values.
-- **Two-tier axiom strategy.** Tier 1: native LinkML `rules:` for simple class-level invariants. Tier 2: annotation-carried axioms with `expr:` (LinkML `equals_expression` syntax) and `nl:` (natural language) forms, attached to the flow or class they govern.
-- **`llm_prompt_hint` as a load-bearing convention.** Every meta-typed element carries a per-element hint designed specifically to guide LLM navigation of that element. Adopted from `pcg.yaml` where it is proven to matter.
-- **Class-centric everything.** No top-level `flows:` / `events:` / `axioms:` blocks. Composition is via LinkML's native `imports:` and `is_a` mechanisms.
-- **Metrics shaped for dbt semantic layer compatibility** (MetricFlow vocabulary) without current dependency. The ontology is authoritative for metrics now; promotion to dbt is the forward path when dbt scales.
+- **Two reasoning modes.** Mode 1: hard gates (blocking axiom + `on_failure_route_to` → recovery flow). Mode 2: cross-domain context assembly (a role with `human_involvement: conditional` fans out query flows, weighs trade-offs, decides). See `ontology_primer.md`.
+- **Agent system: generic agents from ontology + deterministic two-layer orchestrator.** One ADK `LlmAgent` template, parameterized by role; orchestrator is plain Python with application/durability layer split (swappable durability backend: JSONL today, Temporal/Restate later). See `agent_system_design.md` §4-§5.
+- **Front door: MCP over the ontology.** Analysis agents and knowledge workers don't need a separate runtime — they ride on an MCP server wrapping the Ontology Service. See `agent_system_design.md` §15.
 
-## Starting a fresh session
+## Next steps
 
-If you're picking this up in a new session:
+See `plan_of_attack.md` for the phased plan. In short:
 
-1. Read `initial_design_draft.md` — especially §11 (spike results), §12 (context management), and §13 (forward-looking work) for the current state.
-2. Skim `CHANGELOG.md` for session-by-session deltas.
-3. Run `python exploder.py supply_chain_demo.yaml` to confirm the tooling still works in your environment.
-4. If you want to verify the LLM-reasoning pattern still holds, re-run the three spike questions from §10 against the current demo file.
-
-## Next steps (from `initial_design_draft.md` §13)
-
-1. Expand the demo ontology further (direction 2 — in progress).
-2. Harden the exploder: resolved JSON view output, richer shape validation, a test suite (direction 3).
-3. Design the orchestrator-side read API (direction 4).
-4. Script the full demo narrative (direction 5).
-5. Meta: proposal protocol for agent-authored ontology diffs (previously tabled in §8; revisit after directions 2–4).
+1. **Phase 0** ✅ — design rule into `CONTRIBUTING.md`; world-state fixture.
+2. **Phase 1** — Ontology Service + prompt renderer (in this repo, branch).
+3. **Phase 2** — First transactional agent in a new orchestrator repo.
+4. **Phases 3-6** — Multi-role happy path; deterministic backbone; Playbook + Scene 5; full demo.
+5. **Phase 7** — MCP front door (can start after Phase 1).
+6. **Phase 8** — Demo UI (parallels Phases 5-6).
