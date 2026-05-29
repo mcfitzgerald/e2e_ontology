@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from ontology_service import OntologyService, RoleView
+from ontology_service import ORIENTATION, OntologyService, RoleView
 
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
@@ -106,6 +106,72 @@ class TestQuantumSchemaRendering:
         prompt = svc.render_role_view("supply_planning").as_agent_prompt()
         # CapacityConflict.competing_skus
         assert "competing_skus: SKU[] (required) — " in prompt
+
+
+class TestOrientation:
+    """Phase 1.6 — static system orientation preface. Identical across all
+    roles by design; replaces what used to be a one-paragraph "supply chain
+    coordination system" opener. §2: world-model commentary about how the
+    system works, not policy. The "no per-role code in the orientation"
+    invariant is the load-bearing test — if a future change tries to vary
+    the preface per role, it'd belong in the role-specific section, not
+    here."""
+
+    @pytest.mark.parametrize("role", ["demand_planning", "supply_planning"])
+    def test_agent_prompt_leads_with_orientation(self, svc, role):
+        prompt = svc.render_role_view(role).as_agent_prompt()
+        # The orientation appears verbatim at the top, before ROLE:.
+        assert prompt.startswith(ORIENTATION.rstrip())
+        # ROLE: label appears after the orientation, not before it.
+        role_idx = prompt.index(f"ROLE: {role}")
+        orientation_end_idx = len(ORIENTATION.rstrip())
+        assert role_idx > orientation_end_idx
+
+    @pytest.mark.parametrize("role", ["demand_planning", "supply_planning"])
+    def test_markdown_leads_with_orientation(self, svc, role):
+        md = svc.render_role_view(role).as_markdown()
+        assert md.startswith(ORIENTATION.rstrip())
+        # # Role: header appears after the orientation.
+        assert f"# Role: {role}" in md
+        assert md.index(f"# Role: {role}") > len(ORIENTATION.rstrip())
+
+    def test_orientation_byte_for_byte_identical_across_roles(self, svc):
+        """The load-bearing invariant: every agent gets the same orientation.
+        If this fails, somebody made the preface role-conditional — push it
+        back into the role-specific section."""
+        prompt_a = svc.render_role_view("demand_planning").as_agent_prompt()
+        prompt_b = svc.render_role_view("supply_planning").as_agent_prompt()
+        prefix_a = prompt_a[: len(ORIENTATION.rstrip())]
+        prefix_b = prompt_b[: len(ORIENTATION.rstrip())]
+        assert prefix_a == prefix_b == ORIENTATION.rstrip()
+
+        md_a = svc.render_role_view("demand_planning").as_markdown()
+        md_b = svc.render_role_view("supply_planning").as_markdown()
+        assert md_a[: len(ORIENTATION.rstrip())] == md_b[: len(ORIENTATION.rstrip())]
+
+    def test_orientation_is_domain_agnostic(self):
+        """No supply-chain-specific terms in the orientation — the same
+        preface should render verbatim against any ontology that follows
+        this architecture (procurement, healthcare, anything)."""
+        lowered = ORIENTATION.lower()
+        for forbidden in (
+            "supply chain", "promo", "otif", "procurement", "manufacturing",
+            "retailer", "sku", "logistics",
+        ):
+            assert forbidden not in lowered, (
+                f"orientation mentions {forbidden!r} — should be domain-agnostic"
+            )
+
+    def test_orientation_names_the_design_rule_and_modes(self):
+        """Two pieces of operational stance the agent needs to internalize —
+        the ontology's world-vs-policy rule (so it knows where its judgment
+        lives) and the two reasoning modes (so it knows how to handle a
+        blocking axiom vs. a fan-out)."""
+        assert "models the world" in ORIENTATION
+        assert "action vocabulary" in ORIENTATION
+        assert "Mode 1" in ORIENTATION and "Mode 2" in ORIENTATION
+        assert "Routing is deterministic" in ORIENTATION
+        assert "ephemeral" in ORIENTATION
 
 
 class TestAdaptersAreFormatOnly:

@@ -20,6 +20,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from .orientation import ORIENTATION
+
 
 class _Base(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -368,7 +370,11 @@ def _render_identity(view: RoleView, *, header: str = "# Role") -> list[str]:
 
 
 def _render_markdown(view: RoleView) -> str:
-    out: list[str] = []
+    # Domain-agnostic system orientation prepended verbatim to every role's
+    # view (§15.4 — "one render function, multiple consumers"). The preface
+    # is identical across roles by design; if you find yourself wanting to
+    # vary it per role, that belongs in the role-specific section below.
+    out: list[str] = [ORIENTATION.rstrip(), ""]
     out.extend(_render_identity(view, header="# Role"))
     out.extend(_render_section_flows(
         "Incoming handoffs (what arrives at me)", view.incoming_handoffs,
@@ -423,14 +429,12 @@ def _render_markdown(view: RoleView) -> str:
 def _render_agent_prompt(view: RoleView) -> str:
     """Plain-text system prompt. Identical content to the markdown view; only
     the framing changes — no markdown headers, just labelled sections, so that
-    an instruction-tuned model doesn't confuse `##` with content boundaries."""
+    an instruction-tuned model doesn't confuse `##` with content boundaries.
+
+    The orientation preface flows through `_render_markdown` as plain text,
+    so this adapter doesn't need to know about it — the header transform
+    below leaves non-header lines untouched."""
     md = _render_markdown(view)
-    preface = (
-        "You are an agent embedded in a supply chain coordination system. "
-        "Your identity, your event surface, and the actions available to you "
-        "are declared by the ontology and rendered below. Treat this prompt "
-        "as the source of truth for who you are and what you can do.\n"
-    )
     # Demote markdown headers to plain labels with a separator rule so
     # section boundaries remain visible to the model after `## ` is stripped.
     lines: list[str] = []
@@ -443,4 +447,4 @@ def _render_agent_prompt(view: RoleView) -> str:
             lines.append(label)
         else:
             lines.append(line)
-    return preface + "\n" + "\n".join(lines).rstrip() + "\n"
+    return "\n".join(lines).rstrip() + "\n"

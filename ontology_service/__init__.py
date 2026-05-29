@@ -5,6 +5,7 @@ model) and downstream consumers (transactional agent prompts, knowledge-worker
 onboarding, MCP responses). See `plan_of_attack.md` §1 and
 `agent_system_design.md` §5 + §15.4.
 """
+from .orientation import ORIENTATION
 from .service import OntologyService, UnknownRoleError
 from .views import (
     AxiomSummary,
@@ -30,4 +31,5 @@ __all__ = [
     "AxiomSummary",
     "QuantumSchema",
     "QuantumSlotSchema",
+    "ORIENTATION",
 ]
