@@ -37,10 +37,42 @@ class AxiomSummary(_Base):
     on_failure_route_to: Optional[str] = None
 
 
+class QuantumSlotSchema(_Base):
+    """One slot on a quantum class — what fields the payload must carry.
+    `range_kind` discriminates primitive (`string`/`integer`/...) vs. `class`
+    (entity reference; pass as string id at the wire) vs. `enum` (bounded;
+    permissible values are emitted inline so the LLM doesn't guess)."""
+    name: str
+    range: str
+    range_kind: str       # "primitive" | "class" | "enum"
+    required: bool
+    multivalued: bool = False
+    description: Optional[str] = None
+    permissible_values: tuple[str, ...] = ()  # populated only when range_kind == "enum"
+
+
+class QuantumSchema(_Base):
+    """Slot schema for a quantum class, rendered into the agent prompt so the
+    LLM knows the payload shape without guessing.
+
+    Sourced from `SchemaView.class_induced_slots()`. Phase 1.5 add — Phase 2
+    revealed that "the LLM guessed the field names and got lucky" is not a
+    verified contract. The slot structure of a quantum is world model (§2):
+    structural fact about what the action vocabulary carries, the same kind
+    of declaration as `target_role` on a flow."""
+    name: str
+    description: Optional[str] = None
+    slots: tuple[QuantumSlotSchema, ...]
+
+
 class FlowSummary(_Base):
     """A flow as seen from a role's perspective. `returns` discriminates shape:
     present → query (request-response, source retains responsibility); absent →
-    handoff (responsibility transfers)."""
+    handoff (responsibility transfers).
+
+    `quantum_schema` and `returns_schema` carry the slot schemas for the
+    payload classes the flow names; they are how the LLM learns the payload
+    shape without guessing."""
     name: str
     kind: str             # "information" | "material" | "cash"
     source_role: str
@@ -52,6 +84,8 @@ class FlowSummary(_Base):
     domain: Optional[str] = None
     llm_prompt_hint: Optional[str] = None
     axioms: tuple[AxiomSummary, ...] = ()
+    quantum_schema: Optional[QuantumSchema] = None
+    returns_schema: Optional[QuantumSchema] = None
 
 
 class EventSummary(_Base):
@@ -170,6 +204,39 @@ def _fmt_flow_line(f: FlowSummary, perspective: str) -> str:
     return ", ".join(parts)
 
 
+def _fmt_quantum_schema(qs: QuantumSchema, label: str, indent: str = "    ") -> list[str]:
+    """Render a quantum or returns slot schema beneath a flow block. Format:
+
+        {indent}{label} {ClassName} slots:
+        {indent}  {slot}: {range}[{[]}] ({required|optional}) — {description}.{ class/enum hint}
+
+    Class-typed slot ranges carry an inline "Pass the entity id as a string."
+    note so the LLM does not embed nested objects unless the schema requires
+    one. Enum slots emit their permissible values inline. Both nudges keep the
+    LLM from guessing payload shape, which Phase 2 showed to be the dominant
+    failure mode without this block."""
+    lines = [f"{indent}{label} {qs.name} slots:"]
+    sub_indent = indent + "  "
+    for s in qs.slots:
+        type_str = s.range + ("[]" if s.multivalued else "")
+        req_str = "required" if s.required else "optional"
+        line = f"{sub_indent}{s.name}: {type_str} ({req_str})"
+        suffix: list[str] = []
+        if s.description:
+            # Descriptions are sometimes multi-line (folded scalars); normalize
+            # whitespace so the rendered line stays single-line.
+            desc = " ".join(s.description.split())
+            suffix.append(desc.rstrip("."))
+        if s.range_kind == "class":
+            suffix.append("Pass the entity id as a string")
+        elif s.range_kind == "enum" and s.permissible_values:
+            suffix.append(f"Values: {', '.join(s.permissible_values)}")
+        if suffix:
+            line += " — " + ". ".join(suffix) + "."
+        lines.append(line)
+    return lines
+
+
 def _render_section_flows(
     title: str, flows: tuple[FlowSummary, ...], perspective: str, empty: str
 ) -> list[str]:
@@ -182,6 +249,10 @@ def _render_section_flows(
         out.append(_fmt_flow_line(f, perspective))
         if f.llm_prompt_hint:
             out.append(f"    hint: {f.llm_prompt_hint.strip()}")
+        if f.quantum_schema:
+            out.extend(_fmt_quantum_schema(f.quantum_schema, "quantum"))
+        if f.returns_schema:
+            out.extend(_fmt_quantum_schema(f.returns_schema, "returns"))
         if f.axioms:
             out.append("    axioms:")
             out.extend(_fmt_axioms(f.axioms, indent="      "))

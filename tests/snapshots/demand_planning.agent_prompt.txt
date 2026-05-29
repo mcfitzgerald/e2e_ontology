@@ -15,14 +15,35 @@ INCOMING HANDOFFS (WHAT ARRIVES AT ME)
 
 - raise_demand_anomaly (information, from demand_sensing): quantum=DemandAnomaly, trigger=demand_anomaly_detected
     hint: Ingress flow for demand anomalies. Symmetric to submit_promo_plan: an external boundary role (demand_sensing) hands a DemandAnomaly to demand_planning. Demand_planning decides whether to revise the forecast and, if so, emits forecast_revised, which drives submit_supply_request downstream. Source role is_boundary: true — treat the anomaly as a fact-from-outside, not an operation to orchestrate.
+    quantum DemandAnomaly slots:
+      anomaly_id: string (required)
+      sku: SKU (required) — Pass the entity id as a string.
+      detected_day: integer (required) — Day (1-365) the anomaly was detected.
+      departure_units: decimal (required) — Signed units the realized/incoming demand deviates from forecast (positive = higher than forecast).
+      severity_score: decimal (optional) — Detector confidence / magnitude score (0.0-1.0). Consumers decide their own thresholds.
+      source_system: string (optional) — Free-form identifier for the detector (POS stream, retailer EDI, social listening, etc.).
 - submit_promo_plan (information, from customer_development): quantum=TradePromotion, trigger=promo_plan_aligned, lifecycle=TradePromotionLifecycle
     hint: Handoff flow that carries an aligned TradePromotion across the supply chain boundary into demand_planning. Source role customer_development is_boundary: true, so the orchestrator should treat the source side as external — negotiation rather than orchestration. Downstream, demand_planning incorporates the promo's volume_uplift_factor and window into a revised forecast and emits forecast_revised, which drives submit_supply_request.
+    quantum TradePromotion slots:
+      promo_id: string (required) — Unique promotion identifier.
+      sku: SKU (required) — SKU the promo applies to. Pass the entity id as a string.
+      retailer: string (required) — Retailer name (Walmart, Target, Kroger, ...).
+      volume_uplift_factor: decimal (required) — Multiplier on baseline demand during the promo window (e.g. 3.0 for 3x).
+      promo_start_day: integer (required) — Day (1-365) the promotion starts.
+      promo_end_day: integer (required) — Day (1-365) the promotion ends.
+      commitment_status: CommitmentStatus (required) — Negotiation/lifecycle status. check_promo_flexibility reads this to decide whether renegotiation is viable. Values: proposed, aligned, committed, contractually_locked.
 
 ---
 OUTGOING HANDOFFS (WHAT I SEND)
 
 - submit_supply_request (information, to supply_planning): quantum=SupplyRequest, trigger=forecast_revised
     hint: Handoff from demand_planning to supply_planning carrying the revised demand signal as a SupplyRequest. This is the topology hinge: all fulfillment decisions now flow through supply/netops, which chooses between internal production (request_production), external production (shift_to_coman), and procurement of raw materials (submit_procurement_request). No lifecycle ref — SupplyRequest is consumed in place by supply_planning's network-level decision logic, not tracked through a formal FSM.
+    quantum SupplyRequest slots:
+      request_id: string (required)
+      sku: SKU (required) — Pass the entity id as a string.
+      volume: decimal (required) — Units needed.
+      required_by: integer (required) — Day (1-365) by which supply must be in position.
+      source_signal_ref: string (optional) — Free-text reference to the upstream signal (promo_id, anomaly_id, etc.).
 
 ---
 INCOMING QUERIES (WHAT OTHERS MAY ASK OF ME)

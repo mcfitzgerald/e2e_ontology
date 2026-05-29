@@ -11,6 +11,8 @@ from .views import (
     EventSummary,
     FlowSummary,
     FSMSummary,
+    QuantumSchema,
+    QuantumSlotSchema,
     RoleIdentity,
     RoleView,
     TransitionSummary,
@@ -26,4 +28,6 @@ __all__ = [
     "FSMSummary",
     "TransitionSummary",
     "AxiomSummary",
+    "QuantumSchema",
+    "QuantumSlotSchema",
 ]

@@ -68,6 +68,46 @@ class TestViewShape:
         assert round_trip == v
 
 
+class TestQuantumSchemaRendering:
+    """Phase 1.5 — the slot block under each flow must surface in the
+    rendered prompt so the LLM doesn't guess payload shape."""
+
+    def test_handoff_prompt_includes_quantum_slot_block(self, svc):
+        prompt = svc.render_role_view("demand_planning").as_agent_prompt()
+        assert "quantum SupplyRequest slots:" in prompt
+        # Required slot with no description renders as bare type/required.
+        assert "request_id: string (required)" in prompt
+        # Class-typed slot carries the "pass entity id as a string" nudge.
+        assert "sku: SKU (required) — Pass the entity id as a string." in prompt
+        # Slot with a description renders the description.
+        assert (
+            "required_by: integer (required) — Day (1-365) by which supply must be in position."
+            in prompt
+        )
+        # Optional slot is marked optional.
+        assert "source_signal_ref: string (optional)" in prompt
+
+    def test_query_prompt_includes_both_slot_blocks(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        # The query carries OTIFQuery; the response carries OTIFExposure.
+        assert "quantum OTIFQuery slots:" in prompt
+        assert "returns OTIFExposure slots:" in prompt
+        assert "calculated_penalty: decimal (required)" in prompt
+
+    def test_enum_slot_renders_permissible_values(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        assert (
+            "commitment_status: CommitmentStatus (required) — "
+            "Values: proposed, aligned, committed, contractually_locked."
+            in prompt
+        )
+
+    def test_multivalued_slot_renders_array_marker(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        # CapacityConflict.competing_skus
+        assert "competing_skus: SKU[] (required) — " in prompt
+
+
 class TestAdaptersAreFormatOnly:
     """Format adapters must not re-query the ontology; they should be pure
     functions over RoleView. If a future refactor breaks this, we want the

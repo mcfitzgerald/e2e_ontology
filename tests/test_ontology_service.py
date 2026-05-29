@@ -149,3 +149,81 @@ class TestOrderDiscipline:
     def test_events_emitted_sorted_by_name(self, svc):
         names = [e.name for e in svc.events_emitted("supply_planning")]
         assert names == sorted(names)
+
+
+class TestQuantumSchemas:
+    """Phase 1.5 — quantum + returns slot schemas surface in FlowSummary so
+    the agent prompt teaches the LLM payload shape. Without this, Phase 2
+    showed that LLMs guess slot names and "get lucky." Slot structure is
+    world model (§2), the same kind of declaration as `target_role`."""
+
+    def test_handoff_carries_quantum_schema(self, svc):
+        v = svc.render_role_view("demand_planning")
+        f = next(x for x in v.outgoing_handoffs if x.name == "submit_supply_request")
+        assert f.quantum_schema is not None
+        assert f.quantum_schema.name == "SupplyRequest"
+        slot_names = {s.name for s in f.quantum_schema.slots}
+        assert slot_names == {
+            "request_id", "sku", "volume", "required_by", "source_signal_ref",
+        }
+        # Required-ness is load-bearing — Phase 2 failed when the LLM omitted
+        # required slots. Snapshot the contract explicitly.
+        required = {s.name for s in f.quantum_schema.slots if s.required}
+        assert required == {"request_id", "sku", "volume", "required_by"}
+        # No `returns:` on a handoff.
+        assert f.returns_schema is None
+
+    def test_class_typed_slot_marked_class_kind(self, svc):
+        v = svc.render_role_view("demand_planning")
+        f = next(x for x in v.outgoing_handoffs if x.name == "submit_supply_request")
+        sku_slot = next(s for s in f.quantum_schema.slots if s.name == "sku")
+        assert sku_slot.range == "SKU"
+        assert sku_slot.range_kind == "class"
+        # Permissible values only populate for enums.
+        assert sku_slot.permissible_values == ()
+
+    def test_query_flow_carries_both_quantum_and_returns_schemas(self, svc):
+        v = svc.render_role_view("supply_planning")
+        f = next(x for x in v.outgoing_queries if x.name == "check_otif_exposure")
+        assert f.quantum_schema is not None and f.quantum_schema.name == "OTIFQuery"
+        assert f.returns_schema is not None and f.returns_schema.name == "OTIFExposure"
+        # OTIFExposure includes calculated_penalty — the field supply_planning
+        # actually reads during Mode 2 trade-off reasoning.
+        returns_slots = {s.name for s in f.returns_schema.slots}
+        assert "calculated_penalty" in returns_slots
+        assert "affected_shipment_value" in returns_slots
+
+    def test_enum_slot_carries_permissible_values(self, svc):
+        """PromoFlexibility.commitment_status is an enum; the agent needs the
+        permissible values inline so it can interpret a returned value without
+        a second read_ontology trip."""
+        v = svc.render_role_view("supply_planning")
+        f = next(x for x in v.outgoing_queries if x.name == "check_promo_flexibility")
+        cs_slot = next(s for s in f.returns_schema.slots if s.name == "commitment_status")
+        assert cs_slot.range == "CommitmentStatus"
+        assert cs_slot.range_kind == "enum"
+        assert set(cs_slot.permissible_values) == {
+            "proposed", "aligned", "committed", "contractually_locked",
+        }
+
+    def test_multivalued_slot_carried_through(self, svc):
+        """CapacityConflict.competing_skus is multivalued. The render needs
+        to expose this so the LLM knows to pass a list, not a single id."""
+        # CapacityConflict appears on escalate_capacity_conflict
+        # (production_planning → supply_planning).
+        v = svc.render_role_view("supply_planning")
+        f = next(x for x in v.incoming_handoffs if x.name == "escalate_capacity_conflict")
+        skus_slot = next(
+            s for s in f.quantum_schema.slots if s.name == "competing_skus"
+        )
+        assert skus_slot.multivalued is True
+        assert skus_slot.range == "SKU"
+        assert skus_slot.range_kind == "class"
+
+    def test_optional_slot_marked_optional(self, svc):
+        v = svc.render_role_view("demand_planning")
+        f = next(x for x in v.outgoing_handoffs if x.name == "submit_supply_request")
+        signal_ref = next(
+            s for s in f.quantum_schema.slots if s.name == "source_signal_ref"
+        )
+        assert signal_ref.required is False

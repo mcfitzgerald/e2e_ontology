@@ -29,12 +29,15 @@ from exploder import (
     ResolvedStateMachine,
     load_ontology,
 )
+from linkml_runtime import SchemaView
 
 from .views import (
     AxiomSummary,
     EventSummary,
     FlowSummary,
     FSMSummary,
+    QuantumSchema,
+    QuantumSlotSchema,
     RoleIdentity,
     RoleView,
     TransitionSummary,
@@ -206,11 +209,12 @@ class OntologyService:
         `as_markdown`, `as_json`) format without re-querying."""
         r = self._require_role(role)
         identity = _to_identity(r)
+        sv = self._ont.schema_view
 
-        in_handoffs = tuple(_to_flow_summary(f) for f in self.incoming_handoffs(role))
-        out_handoffs = tuple(_to_flow_summary(f) for f in self.outgoing_handoffs(role))
-        in_queries = tuple(_to_flow_summary(f) for f in self.incoming_queries(role))
-        out_queries = tuple(_to_flow_summary(f) for f in self.outgoing_queries(role))
+        in_handoffs = tuple(_to_flow_summary(f, sv) for f in self.incoming_handoffs(role))
+        out_handoffs = tuple(_to_flow_summary(f, sv) for f in self.outgoing_handoffs(role))
+        in_queries = tuple(_to_flow_summary(f, sv) for f in self.incoming_queries(role))
+        out_queries = tuple(_to_flow_summary(f, sv) for f in self.outgoing_queries(role))
 
         observed = tuple(_to_event_summary(e) for e in self.events_observed(role))
         emitted = tuple(_to_event_summary(e) for e in self.events_emitted(role))
@@ -260,7 +264,7 @@ def _to_axiom_summary(ax: AxiomBody) -> AxiomSummary:
     )
 
 
-def _to_flow_summary(f: ResolvedFlow) -> FlowSummary:
+def _to_flow_summary(f: ResolvedFlow, sv: SchemaView) -> FlowSummary:
     return FlowSummary(
         name=f.name,
         kind=f.kind,
@@ -273,6 +277,73 @@ def _to_flow_summary(f: ResolvedFlow) -> FlowSummary:
         domain=f.domain,
         llm_prompt_hint=f.llm_prompt_hint,
         axioms=tuple(_to_axiom_summary(a) for a in f.axioms),
+        quantum_schema=_to_quantum_schema(sv, f.body.quantum),
+        returns_schema=_to_quantum_schema(sv, f.body.returns) if f.body.returns else None,
+    )
+
+
+def _classify_range(sv: SchemaView, range_name: str) -> str:
+    """Discriminate primitive vs. class vs. enum range. Order matters: enums
+    and classes can in principle share a name with LinkML primitives, so we
+    check enum first, then class, then fall through to primitive."""
+    try:
+        if sv.get_enum(range_name) is not None:
+            return "enum"
+    except (KeyError, ValueError):
+        pass
+    try:
+        if sv.get_class(range_name) is not None:
+            return "class"
+    except (KeyError, ValueError):
+        pass
+    return "primitive"
+
+
+def _to_quantum_schema(sv: SchemaView, class_name: str | None) -> QuantumSchema | None:
+    """Resolve a class's induced slots into a QuantumSchema. Returns None for
+    a missing class (defensive — the cross-ref validator catches unknown
+    quantum names at strict-validate time, so this should only fire if a
+    caller hands in a non-class string)."""
+    if class_name is None:
+        return None
+    try:
+        cls = sv.get_class(class_name)
+    except (KeyError, ValueError):
+        return None
+    if cls is None:
+        return None
+    try:
+        induced = sv.class_induced_slots(class_name)
+    except (KeyError, ValueError):
+        return None
+
+    slot_summaries: list[QuantumSlotSchema] = []
+    for s in induced:
+        range_name = s.range or sv.schema.default_range or "string"
+        range_kind = _classify_range(sv, range_name)
+        perms: tuple[str, ...] = ()
+        if range_kind == "enum":
+            try:
+                enum_def = sv.get_enum(range_name)
+            except (KeyError, ValueError):
+                enum_def = None
+            if enum_def is not None and enum_def.permissible_values:
+                perms = tuple(enum_def.permissible_values.keys())
+        slot_summaries.append(
+            QuantumSlotSchema(
+                name=s.name,
+                range=range_name,
+                range_kind=range_kind,
+                required=bool(s.required),
+                multivalued=bool(s.multivalued),
+                description=s.description,
+                permissible_values=perms,
+            )
+        )
+    return QuantumSchema(
+        name=class_name,
+        description=cls.description,
+        slots=tuple(slot_summaries),
     )
 
 
