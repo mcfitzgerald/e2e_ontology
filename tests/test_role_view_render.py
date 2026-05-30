@@ -108,6 +108,95 @@ class TestQuantumSchemaRendering:
         assert "competing_skus: SKU[] (required) — " in prompt
 
 
+class TestPlaybookRendering:
+    """Phase 1.8 — the PLAYBOOKS ANCHORED TO ME section, and the §2-critical
+    neutralization: list order must never read as priority."""
+
+    def test_playbook_section_present_for_supply_planning(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        assert "PLAYBOOKS ANCHORED TO ME" in prompt
+        assert "resolve_capacity_conflict" in prompt
+        assert "triggered_by: capacity_conflict_detected" in prompt
+        assert "input_quantum: CapacityConflict" in prompt
+
+    def test_playbook_absent_for_unanchored_role(self, svc):
+        prompt = svc.render_role_view("production_planning").as_agent_prompt()
+        assert "(none — no playbook is anchored to this role)" in prompt
+        assert "resolve_capacity_conflict" not in prompt
+
+    def test_context_assembly_shows_returns_and_sync(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        assert "context_assembly (parallel, wait_all):" in prompt
+        assert "check_otif_exposure  (returns OTIFExposure)" in prompt
+        assert "check_coman_availability  (returns ComanAvailability)" in prompt
+
+    def test_resolution_paths_neutralized(self, svc):
+        """The load-bearing §2 test: resolution paths render alphabetized and
+        explicitly labelled 'order arbitrary'. A reader must not be able to
+        infer a preferred path from list position."""
+        v = svc.render_role_view("supply_planning")
+        pb = v.playbooks_anchored_to[0]
+        flows = [r.flow for r in pb.selects_one_of]
+        assert flows == sorted(flows), "resolution paths must be alphabetized (neutralized)"
+        prompt = v.as_agent_prompt()
+        assert "resolution paths (pick one; order arbitrary):" in prompt
+        # Each path carries its target role.
+        assert "request_promo_revision  (to customer_development)" in prompt
+        assert "shift_to_coman  (to co_manufacturing)" in prompt
+
+    def test_criteria_carry_nl(self, svc):
+        v = svc.render_role_view("supply_planning")
+        pb = v.playbooks_anchored_to[0]
+        crit_names = {c.name for c in pb.criteria}
+        assert crit_names == {
+            "viable_promo_renegotiation", "viable_coman_shift", "tolerable_otif_penalty",
+        }
+        # nl text is resolved from the advisory axioms, not left as a bare name.
+        assert all(len(c.nl) > 20 for c in pb.criteria)
+
+    def test_always_fires_rendered(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        assert "always fires on completion:" in prompt
+        assert "event: capacity_resolved" in prompt
+        assert "flow: plan_fulfillment" in prompt
+
+
+class TestToolRendering:
+    """Phase 1.8 — the TOOLS AVAILABLE TO ME section, filtered by available_to."""
+
+    def test_tools_section_lists_readers(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        assert "TOOLS AVAILABLE TO ME" in prompt
+        assert "(reader) query_plants_for_sku:" in prompt
+        assert "input:  PlantQuery (sku: SKU)" in prompt
+        assert "output: PlantQueryResult (lines: ProductionLine[])" in prompt
+
+    def test_tools_filtered_by_available_to(self, svc):
+        """production_planning is in available_to only for query_line_load."""
+        v = svc.render_role_view("production_planning")
+        names = [t.name for t in v.tools_available_to]
+        assert names == ["query_line_load"]
+        prompt = v.as_agent_prompt()
+        assert "(reader) query_line_load:" in prompt
+        assert "query_plants_for_sku" not in prompt
+
+    def test_call_tool_kit_line_lists_available_tools(self, svc):
+        prompt = svc.render_role_view("supply_planning").as_agent_prompt()
+        # The fixed tool-kit call_tool line now enumerates the role's tools.
+        assert "call_tool(name, input): invoke a declared tool available to you" in prompt
+        assert "query_commitments_in_window" in prompt
+
+
+class TestPlaybookToolSerialization:
+    def test_round_trip_preserves_playbooks_and_tools(self, svc):
+        v = svc.render_role_view("supply_planning")
+        data = v.as_json()
+        assert data["playbooks_anchored_to"][0]["name"] == "resolve_capacity_conflict"
+        assert len(data["tools_available_to"]) == 4
+        round_trip = RoleView.model_validate(data)
+        assert round_trip == v
+
+
 class TestOrientation:
     """Phase 1.6 — static system orientation preface. Identical across all
     roles by design; replaces what used to be a one-paragraph "supply chain

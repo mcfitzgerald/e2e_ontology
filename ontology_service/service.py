@@ -25,8 +25,10 @@ from exploder import (
     Ontology,
     ResolvedEvent,
     ResolvedFlow,
+    ResolvedPlaybook,
     ResolvedRole,
     ResolvedStateMachine,
+    ResolvedTool,
     load_ontology,
 )
 from linkml_runtime import SchemaView
@@ -36,10 +38,16 @@ from .views import (
     EventSummary,
     FlowSummary,
     FSMSummary,
+    PlaybookCriterionView,
+    PlaybookEffectView,
+    PlaybookQueryStepView,
+    PlaybookResolutionView,
+    PlaybookSummary,
     QuantumSchema,
     QuantumSlotSchema,
     RoleIdentity,
     RoleView,
+    ToolSummary,
     TransitionSummary,
 )
 
@@ -200,6 +208,29 @@ class OntologyService:
         out.sort(key=lambda pair: (pair[0], pair[1].name))
         return out
 
+    def _axioms_by_name(self) -> dict[str, AxiomBody]:
+        """Every flow-declared axiom, indexed by name. Used to resolve a
+        Playbook's criteria_refs to their authoritative `nl` definitions."""
+        out: dict[str, AxiomBody] = {}
+        for f in self._ont.flows.values():
+            for ax in f.axioms:
+                out[ax.name] = ax
+        return out
+
+    # ---- playbooks + tools -------------------------------------------------
+
+    def playbooks_anchored_to(self, role: str) -> list[ResolvedPlaybook]:
+        """Playbooks whose `role` is this role — the Mode 2 scaffolds the
+        agent runs. Sorted by name."""
+        self._require_role(role)
+        return self._ont.playbooks_for_role(role)
+
+    def tools_available_to(self, role: str) -> list[ResolvedTool]:
+        """Tools this role may invoke via `call_tool` (role in available_to).
+        Sorted by name."""
+        self._require_role(role)
+        return self._ont.tools_for_role(role)
+
     # ---- view assembly -----------------------------------------------------
 
     def render_role_view(self, role: str) -> RoleView:
@@ -226,6 +257,15 @@ class OntologyService:
 
         advisory = tuple(_to_axiom_summary(ax) for _flow, ax in self.advisory_axioms_for(role))
 
+        axiom_index = self._axioms_by_name()
+        playbooks = tuple(
+            _to_playbook_summary(pb, self._ont, axiom_index)
+            for pb in self.playbooks_anchored_to(role)
+        )
+        tools = tuple(
+            _to_tool_summary(t, sv) for t in self.tools_available_to(role)
+        )
+
         return RoleView(
             identity=identity,
             incoming_handoffs=in_handoffs,
@@ -235,8 +275,8 @@ class OntologyService:
             events_observed=observed,
             events_emitted=emitted,
             fsms_governing_my_quanta=fsms,
-            playbooks_anchored_to=(),    # Phase 5
-            tools_available_to=(),       # Phase 5
+            playbooks_anchored_to=playbooks,
+            tools_available_to=tools,
             advisory_criteria=advisory,
         )
 
@@ -374,6 +414,82 @@ def _to_fsm_summary(sm: ResolvedStateMachine, governs_flows: list[str]) -> FSMSu
         terminal=tuple(sm.body.terminal or ()),
         transitions=transitions,
         governs_flows=tuple(sorted(governs_flows)),
+    )
+
+
+def _to_playbook_summary(
+    pb: ResolvedPlaybook, ont: Ontology, axiom_index: dict[str, AxiomBody]
+) -> PlaybookSummary:
+    """Resolve a Playbook into the rendered summary. The four inner lists are
+    sorted by name so list position never implies priority (§2). Each query
+    step is enriched with its `returns` class; each resolution path with its
+    `target_role`; each criterion with the axiom's authoritative `nl`."""
+    b = pb.body
+
+    steps = sorted(b.context_assembly or [], key=lambda s: s.flow)
+    context_assembly = tuple(
+        PlaybookQueryStepView(
+            flow=s.flow,
+            returns=(ont.flows[s.flow].body.returns if s.flow in ont.flows else None),
+            required=True if s.required is None else bool(s.required),
+        )
+        for s in steps
+    )
+
+    criteria: tuple[PlaybookCriterionView, ...] = ()
+    resolutions: tuple[PlaybookResolutionView, ...] = ()
+    if b.decision is not None:
+        criteria = tuple(
+            PlaybookCriterionView(
+                name=name,
+                nl=(axiom_index[name].nl if name in axiom_index else "(criterion not found)"),
+            )
+            for name in sorted(b.decision.criteria_refs or [])
+        )
+        resolutions = tuple(
+            PlaybookResolutionView(
+                flow=flow,
+                target_role=(ont.flows[flow].body.target_role if flow in ont.flows else "?"),
+            )
+            for flow in sorted(b.decision.selects_one_of or [])
+        )
+
+    effects = sorted(
+        b.always_fires or [], key=lambda e: e.event or e.flow or ""
+    )
+    always_fires = tuple(
+        PlaybookEffectView(
+            kind="event" if e.event else "flow",
+            name=e.event or e.flow,
+        )
+        for e in effects
+    )
+
+    return PlaybookSummary(
+        name=pb.name,
+        triggered_by=b.triggered_by,
+        input_quantum=b.input_quantum,
+        synchronization=_enum_value(b.synchronization) or "wait_all",
+        context_assembly=context_assembly,
+        criteria=criteria,
+        selects_one_of=resolutions,
+        always_fires=always_fires,
+        llm_prompt_hint=pb.llm_prompt_hint,
+    )
+
+
+def _to_tool_summary(t: ResolvedTool, sv: SchemaView) -> ToolSummary:
+    b = t.body
+    return ToolSummary(
+        name=t.name,
+        category=_enum_value(b.category) or "reader",
+        description=b.description,
+        input_class=b.input_class,
+        output_class=b.output_class,
+        implementation=b.implementation,
+        input_schema=_to_quantum_schema(sv, b.input_class),
+        output_schema=_to_quantum_schema(sv, b.output_class),
+        llm_prompt_hint=t.llm_prompt_hint,
     )
 
 

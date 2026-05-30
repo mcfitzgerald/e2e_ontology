@@ -13,9 +13,11 @@ class TestDemoParity:
 
     def test_counts(self, demo_yaml_path):
         ontology = load_ontology(demo_yaml_path)
-        # Post-Phase-F: adds DemandAnomaly as the ingress quantum for the
-        # demand_sensing boundary role → 16 + 1 = 17
-        assert len(ontology.entities) == 17
+        # Post-Phase-F: adds DemandAnomaly as the ingress quantum → 16 + 1 = 17.
+        # Phase 1.8: + 7 reader-tool query/result entities (PlantQuery,
+        # PlantQueryResult, LineLoadQuery, LineLoad, CommitmentQuery,
+        # CommitmentQueryResult, SupplierQuery) → 17 + 7 = 24.
+        assert len(ontology.entities) == 24
         # Post-Phase-F: + demand_sensing boundary role
         assert len(ontology.roles) == 9
         # Post-Phase-F: + capacity_resolved
@@ -24,6 +26,9 @@ class TestDemoParity:
         # Post-Phase-F: original 3 + 8 handoffs (incl. re_request_production)
         # + 3 query + 1 ingress (raise_demand_anomaly) = 15
         assert len(ontology.flows) == 15
+        # Phase 1.8: the Scene 5 Playbook + the four reader Tools.
+        assert len(ontology.playbooks) == 1
+        assert len(ontology.tools) == 4
         assert len(ontology.enums) == 5
 
     def test_entity_names(self, demo_yaml_path):
@@ -39,6 +44,9 @@ class TestDemoParity:
             "ComanAvailabilityQuery", "ComanAvailability",
             # Phase F ingress quantum
             "DemandAnomaly",
+            # Phase 1.8 reader-tool query/result entities
+            "PlantQuery", "PlantQueryResult", "LineLoadQuery", "LineLoad",
+            "CommitmentQuery", "CommitmentQueryResult", "SupplierQuery",
         }
 
     def test_role_names(self, demo_yaml_path):

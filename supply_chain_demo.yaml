@@ -593,6 +593,145 @@ classes:
         range: string
 
   # --------------------------------------------------------------------------
+  # Reader-tool query + result entities (Phase 1.8)
+  # ==========================================================================
+  # Minimal typed input/output shells for the four reader tools. These give
+  # agents a way to read world state (plants, line load, commitments, supplier)
+  # instead of inventing it — the deterministic counter to the hallucinated-
+  # grounding pattern Phase 3 surfaced. Slot shapes are kept to exactly what
+  # the orchestrator's reader implementation needs. All plain entities.
+  # --------------------------------------------------------------------------
+
+  PlantQuery:
+    description: >-
+      Input to query_plants_for_sku: which production lines can make this SKU?
+    annotations:
+      scont:domain: supply_netops
+      scont:subdomain: capacity
+    attributes:
+      sku:
+        description: "SKU to find capable production lines for"
+        range: SKU
+        required: true
+
+  PlantQueryResult:
+    description: >-
+      Output of query_plants_for_sku: the production lines (plant + line +
+      rated capacity) that can produce the requested SKU, from world state.
+    annotations:
+      scont:domain: supply_netops
+      scont:subdomain: capacity
+    attributes:
+      lines:
+        description: "Production lines capable of producing the SKU"
+        range: ProductionLine
+        multivalued: true
+
+  LineLoadQuery:
+    description: >-
+      Input to query_line_load: how much production is already scheduled on a
+      (plant, line) across a window?
+    annotations:
+      scont:domain: supply_netops
+      scont:subdomain: capacity
+    attributes:
+      plant_code:
+        description: "Plant the line belongs to"
+        range: string
+        required: true
+      line_code:
+        description: "Line within the plant to read load for"
+        range: string
+        required: true
+      window_start_day:
+        description: "Day (1-365) the window opens"
+        range: integer
+        required: true
+      window_end_day:
+        description: "Day (1-365) the window closes"
+        range: integer
+        required: true
+
+  LineLoad:
+    description: >-
+      Output of query_line_load: scheduled production load on a (plant, line)
+      for the requested window, from the world-state production schedule.
+    annotations:
+      scont:domain: supply_netops
+      scont:subdomain: capacity
+    attributes:
+      plant_code:
+        description: "Plant the line belongs to"
+        range: string
+        required: true
+      line_code:
+        description: "Line the load is reported for"
+        range: string
+        required: true
+      window_start_day:
+        description: "Day (1-365) the window opens"
+        range: integer
+        required: true
+      window_end_day:
+        description: "Day (1-365) the window closes"
+        range: integer
+        required: true
+      scheduled_units:
+        description: "Units already scheduled on the line across the window"
+        range: decimal
+        required: true
+
+  CommitmentQuery:
+    description: >-
+      Input to query_commitments_in_window: which retailer commitments touch a
+      (sku, retailer, window)?
+    annotations:
+      scont:domain: logistics
+      scont:subdomain: retailer_commitment
+    attributes:
+      sku:
+        description: "SKU whose commitments to read"
+        range: SKU
+        required: true
+      retailer:
+        description: "Optional retailer filter; omit to match all retailers"
+        range: string
+      window_start_day:
+        description: "Day (1-365) the window opens"
+        range: integer
+        required: true
+      window_end_day:
+        description: "Day (1-365) the window closes"
+        range: integer
+        required: true
+
+  CommitmentQueryResult:
+    description: >-
+      Output of query_commitments_in_window: the retailer commitments matching
+      the query, from world state.
+    annotations:
+      scont:domain: logistics
+      scont:subdomain: retailer_commitment
+    attributes:
+      commitments:
+        description: "Retailer commitments touching the queried window"
+        range: RetailerCommitment
+        multivalued: true
+
+  SupplierQuery:
+    description: >-
+      Input to query_supplier_for_sku: which supplier provides raw materials
+      for this SKU? The output is the Supplier entity (with lead time).
+    annotations:
+      scont:domain: procurement
+      scont:subdomain: sourcing
+    attributes:
+      sku:
+        description: "SKU whose raw-material supplier to resolve"
+        range: SKU
+        required: true
+
+  # --------------------------------------------------------------------------
   # Roles — meta-typed, lightweight tag + JSON annotation
   # --------------------------------------------------------------------------
 
@@ -820,6 +959,7 @@ classes:
             "name": "respect_lead_time",
             "scope": "flow",
             "expr": "{quantum.required_by} >= today() + {quantum.supplier.lead_time_days}",
+            "tool_ref": "evaluate_respect_lead_time",
             "nl":   "A procurement request's required-by date must not fall inside its supplier's lead time.",
             "severity": "blocking",
             "message":  "Required-by date is inside supplier lead time",
@@ -1046,6 +1186,7 @@ classes:
             "name": "line_capacity_not_exceeded",
             "scope": "flow",
             "expr": "sum_scheduled_units({quantum.assigned_line}, {quantum.window_start_day}, {quantum.window_end_day}) + {quantum.volume} <= {quantum.assigned_line.rated_weekly_capacity}",
+            "tool_ref": "evaluate_line_capacity_not_exceeded",
             "nl":   "Total scheduled production on the assigned line for the requested window must not exceed the line's rated weekly capacity.",
             "severity": "blocking",
             "message":  "Assigned line is over capacity for the requested window",
@@ -1191,6 +1332,16 @@ classes:
           "quantum":       "OTIFQuery",
           "returns":       "OTIFExposure"
         }
+      scont:axioms: >-
+        [
+          {
+            "name": "tolerable_otif_penalty",
+            "scope": "flow",
+            "nl": "OTIF penalty exposure is a quantified input to the capacity-conflict trade-off, not a gate. This criterion surfaces the calculated penalty (OTIFExposure.calculated_penalty) and the affected shipment value so the agent can weigh accepting the delay against the cost of the alternative resolution paths. The ontology declares no threshold above which a penalty becomes intolerable — that judgment, and the line above which a human is engaged, belong to the agent and the orchestrator's policy, not the world model.",
+            "severity": "advisory",
+            "references": {"classes": ["OTIFExposure", "RetailerCommitment"]}
+          }
+        ]
       scont:llm_prompt_hint: >-
         Query flow fired by supply_planning during Mode 2 context assembly after a
         CapacityConflict lands. Asks logistics_planning to quantify financial
@@ -1212,6 +1363,16 @@ classes:
           "quantum":       "PromoFlexibilityQuery",
           "returns":       "PromoFlexibility"
         }
+      scont:axioms: >-
+        [
+          {
+            "name": "viable_promo_renegotiation",
+            "scope": "flow",
+            "nl": "Promo renegotiation (request_promo_revision) is a structurally viable resolution path only when the trade promotion's commitment_status is still negotiable — proposed or aligned are openly negotiable; committed requires formal renegotiation; contractually_locked closes the path. Viability also requires that at least one of the requested change kinds is permitted: PromoFlexibility.can_shift_timing or can_reduce_volume must be true. This criterion reports whether the path is open, not whether it should be preferred over the alternatives.",
+            "severity": "advisory",
+            "references": {"classes": ["PromoFlexibility", "TradePromotion"]}
+          }
+        ]
       scont:llm_prompt_hint: >-
         Boundary-crossing query flow. Supply_planning asks customer_development
         whether a trade promotion can be shifted, reduced, or cancelled. Target role
@@ -1232,6 +1393,16 @@ classes:
           "quantum":       "ComanAvailabilityQuery",
           "returns":       "ComanAvailability"
         }
+      scont:axioms: >-
+        [
+          {
+            "name": "viable_coman_shift",
+            "scope": "flow",
+            "nl": "Shifting production to a co-manufacturer (shift_to_coman) is a structurally viable resolution path only when a qualified co-man has capacity in the requested window — ComanAvailability.is_qualified AND has_capacity must both be true. An unqualified co-man or one without window capacity closes the path. The premium cost (premium_cost_per_unit) is an input the agent weighs against the other paths; this criterion reports availability, not whether paying the premium is the right call.",
+            "severity": "advisory",
+            "references": {"classes": ["ComanAvailability"]}
+          }
+        ]
       scont:llm_prompt_hint: >-
         Boundary-crossing query flow. Supply_planning asks co_manufacturing whether
         a qualified external line has capacity in the requested window, and at what
@@ -1239,6 +1410,154 @@ classes:
         during Mode 2 context assembly to decide whether shift_to_coman is a viable
         resolution path for a CapacityConflict. A positive ComanAvailability (is_qualified
         AND has_capacity) unlocks shift_to_coman as an execution option.
+
+  # --------------------------------------------------------------------------
+  # Playbook (Phase 1.8) — the Scene 5 cross-domain conflict-resolution scaffold
+  # ==========================================================================
+  # Anchors the Mode 2 choreography to (supply_planning, capacity_conflict_detected).
+  # Declares the queries to fan out, the advisory criteria relevant to the
+  # choice, and the resolution paths available. It does NOT declare which path
+  # to prefer, in what order, or what to do at the margin — those remain agentic
+  # (see agent_system_design.md §2 and §6.1). The Phase 5 stop condition: if
+  # Scene 5 stops producing different resolutions across LLM seeds, agency has
+  # been structured away and this playbook must be revisited against §2.
+  #
+  # selects_one_of and context_assembly list order is authoring convenience
+  # only — the renderer neutralizes (alphabetizes) the lists, and the primer
+  # states the rule. A reader who treats top-of-list as preferred has
+  # reintroduced policy.
+  # --------------------------------------------------------------------------
+
+  resolve_capacity_conflict:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: supply_netops
+      scont:playbook: >-
+        {
+          "role": "supply_planning",
+          "triggered_by": "capacity_conflict_detected",
+          "input_quantum": "CapacityConflict",
+          "context_assembly": [
+            { "flow": "check_otif_exposure",      "required": true },
+            { "flow": "check_promo_flexibility",  "required": true },
+            { "flow": "check_coman_availability", "required": true }
+          ],
+          "synchronization": "wait_all",
+          "decision": {
+            "criteria_refs": [
+              "viable_promo_renegotiation",
+              "viable_coman_shift",
+              "tolerable_otif_penalty"
+            ],
+            "selects_one_of": [
+              "request_promo_revision",
+              "re_request_production",
+              "shift_to_coman"
+            ]
+          },
+          "always_fires": [
+            { "event": "capacity_resolved" },
+            { "flow":  "plan_fulfillment" }
+          ]
+        }
+      scont:llm_prompt_hint: >-
+        Cross-domain conflict resolution. The three context-assembly queries
+        gather typed evidence from logistics (OTIF exposure), commercial (promo
+        flexibility), and external co-manufacturing (availability + premium).
+        The decision is yours — weigh the three advisory criteria against the
+        assembled responses and pick one resolution path. The listed order of
+        the paths is not a ranking. The orchestrator surfaces the decision to a
+        human per its human_involvement policy on supply_planning.
+
+  # --------------------------------------------------------------------------
+  # Tools (Phase 1.8) — four reader tools over world state
+  # ==========================================================================
+  # Reader tools give agents a deterministic way to read world state (which
+  # plants make a SKU, current line load, commitments in a window, the supplier
+  # for a SKU) instead of inventing it. `implementation` is a contract name the
+  # orchestrator binds to a Python callable at boot — it does not resolve to
+  # anything in the ontology. `available_to` is the capability surface the
+  # role-view renderer filters on. This Tool registry is separate from the
+  # axiom `tool_ref` registry (agent-callable vs. internal evaluators);
+  # unifying them is a deferred §12 open question.
+  # --------------------------------------------------------------------------
+
+  query_plants_for_sku:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: supply_netops
+      scont:tool: >-
+        {
+          "description": "Returns the production lines (plant + line + capacity) that can produce the given SKU, based on world state.",
+          "category": "reader",
+          "input_class":  "PlantQuery",
+          "output_class": "PlantQueryResult",
+          "implementation": "query_plants_for_sku",
+          "deterministic": true,
+          "available_to": ["supply_planning"]
+        }
+      scont:llm_prompt_hint: >-
+        Use before assigning production: read which lines can actually make the
+        SKU rather than guessing plant/line codes. Pairs with query_line_load to
+        check whether a candidate line has room in the window.
+
+  query_line_load:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: supply_netops
+      scont:tool: >-
+        {
+          "description": "Returns scheduled production load on a (plant, line) for a window, from the world-state production schedule.",
+          "category": "reader",
+          "input_class":  "LineLoadQuery",
+          "output_class": "LineLoad",
+          "implementation": "query_line_load",
+          "deterministic": true,
+          "available_to": ["supply_planning", "production_planning"]
+        }
+      scont:llm_prompt_hint: >-
+        Read current scheduled load before proposing or re-proposing production
+        on a line. The line_capacity_not_exceeded axiom evaluates the same
+        world-state schedule deterministically; this tool lets the agent check
+        feasibility up front so the guard passes on first try.
+
+  query_commitments_in_window:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: logistics
+      scont:tool: >-
+        {
+          "description": "Returns retailer commitments touching a (sku, retailer, window).",
+          "category": "reader",
+          "input_class":  "CommitmentQuery",
+          "output_class": "CommitmentQueryResult",
+          "implementation": "query_commitments_in_window",
+          "deterministic": true,
+          "available_to": ["supply_planning", "logistics_planning"]
+        }
+      scont:llm_prompt_hint: >-
+        Read the real retailer commitments at risk in a window rather than
+        inferring them. Feeds the OTIF exposure reasoning during Mode 2 context
+        assembly.
+
+  query_supplier_for_sku:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: procurement
+      scont:tool: >-
+        {
+          "description": "Returns the supplier (with lead time) that provides raw materials for the given SKU.",
+          "category": "reader",
+          "input_class":  "SupplierQuery",
+          "output_class": "Supplier",
+          "implementation": "query_supplier_for_sku",
+          "deterministic": true,
+          "available_to": ["supply_planning", "procurement"]
+        }
+      scont:llm_prompt_hint: >-
+        Read the actual supplier and its committed lead time before drafting a
+        ProcurementRequest. The respect_lead_time axiom evaluates against this
+        same lead time; reading it up front keeps required-by dates feasible.
 
 # ============================================================================
 # ENUMS

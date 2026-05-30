@@ -45,7 +45,7 @@ When LinkML ships native annotation validation, `scont_meta.yaml` slots straight
 
 | File | Role |
 |---|---|
-| `scont_meta.yaml` | Metaschema. Source of truth for annotation body shapes (`RoleBody`, `FlowBody`, `AxiomBody`, `StateMachineBody`, `EventBody`, `MetricBody`, `AxiomReferences`, `TransitionBody`) and enums (`Severity`, `Scope`, `HumanInvolvement`, `FlowKind`, `MetricKind`, `MetricSource`). |
+| `scont_meta.yaml` | Metaschema. Source of truth for annotation body shapes (`RoleBody`, `FlowBody`, `AxiomBody`, `StateMachineBody`, `EventBody`, `MetricBody`, `AxiomReferences`, `TransitionBody`, `PlaybookBody` + `PlaybookQueryStep`/`PlaybookDecision`/`PlaybookAlwaysFires`, `ToolBody`) and enums (`Severity`, `Scope`, `HumanInvolvement`, `FlowKind`, `MetricKind`, `MetricSource`, `PlaybookSynchronization`, `ToolCategory`). `Playbook`/`Tool` `llm_prompt_hint` is a sibling annotation (FlowBody precedent), not a body field. |
 | `scont_bodies.py` | Auto-generated Pydantic models from `scont_meta.yaml`. Regenerate via `exploder.py regen-bodies`. |
 | `core.yaml` | Meta-class documentation shells — `Role`, `Event`, `Flow` (abstract) + `InformationFlow`/`MaterialFlow`/`CashFlow`, `StateMachine`. No enforced slots; just canonical docs. Imported by content schemas. |
 | `supply_chain_demo.yaml` | Current concrete content (~1300 lines). Promo whiplash narrative spanning commercial/demand/supply_netops/manufacturing/logistics. |
@@ -55,7 +55,7 @@ When LinkML ships native annotation validation, `scont_meta.yaml` slots straight
 | `exploder.py` | Parser + object model + cross-reference validator + query API + CLI. Built on `linkml_runtime.SchemaView`. |
 | `editor/` | Visual ontology editor / explorer (Phase I.3 MVP). Front door for ontology authors and visual stakeholders. |
 | `ontology_service/` | Phase 1 deliverable. Read-only role-scoped query API (`OntologyService`) over a loaded `Ontology`, plus a typed `RoleView` snapshot and three format adapters (`as_agent_prompt`, `as_markdown`, `as_json`). Substrate for the agent runtime (Phase 2) and the MCP front door (Phase 7). |
-| `tests/` | pytest suite (192 tests). `test_bodies` (Pydantic shape validation), `test_loader` (parsing), `test_query_api`, `test_integration` (end-to-end counts + invariants), `test_diff`, `test_scaffolding`, `test_world_state` (fixture structure + conflict math), `test_ontology_service` + `test_role_view_render` (Phase 1; with snapshots under `tests/snapshots/`). |
+| `tests/` | pytest suite (249 tests). `test_bodies` (Pydantic shape validation), `test_loader` (parsing), `test_query_api`, `test_integration` (end-to-end counts + invariants), `test_diff`, `test_scaffolding`, `test_world_state` (fixture structure + conflict math), `test_ontology_service` + `test_role_view_render` (Phase 1; with snapshots under `tests/snapshots/`). |
 | `.linkmllint.yaml` | linkml-lint config. `standard_naming` is disabled because scont-tagged classes use snake_case by convention. |
 
 ## Commands
@@ -92,7 +92,7 @@ The CLI subcommand set: `validate`, `summary`, `inspect`, `query`, `doc`, `regen
 | Check | Enforced by |
 |---|---|
 | Annotation body field shapes (types, required, enum membership) | Auto-generated Pydantic in `scont_bodies.py` |
-| Cross-refs (`source_role`, `target_role`, `quantum`, `trigger_event`, `lifecycle_ref`, `returns`, `on_failure_route_to`, FSM guards) | `exploder.py` cross-ref resolver |
+| Cross-refs (`source_role`, `target_role`, `quantum`, `trigger_event`, `lifecycle_ref`, `returns`, `on_failure_route_to`, FSM guards; Playbook anchor/context_assembly-is-query-flow/advisory-criteria/selects_one_of/always_fires + single-playbook-per-anchor; Tool input/output classes + `available_to`) | `exploder.py` cross-ref resolver |
 | FSM internal consistency | `exploder.py` |
 | LinkML-level best practices | `linkml-lint` (invoked by exploder) |
 | Non-blocking warnings (unused roles/events/FSMs, missing domain tags, boundary-role misuse) | `exploder.py` warnings layer |

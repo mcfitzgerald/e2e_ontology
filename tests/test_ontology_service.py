@@ -151,6 +151,65 @@ class TestOrderDiscipline:
         assert names == sorted(names)
 
 
+class TestPlaybooks:
+    """Phase 1.8 — Playbooks anchored to a role."""
+
+    def test_supply_planning_has_resolve_capacity_conflict(self, svc):
+        pbs = svc.playbooks_anchored_to("supply_planning")
+        assert [p.name for p in pbs] == ["resolve_capacity_conflict"]
+        pb = pbs[0]
+        assert pb.body.role == "supply_planning"
+        assert pb.body.triggered_by == "capacity_conflict_detected"
+        assert pb.body.input_quantum == "CapacityConflict"
+
+    def test_other_roles_have_no_playbook(self, svc):
+        assert svc.playbooks_anchored_to("production_planning") == []
+        assert svc.playbooks_anchored_to("logistics_planning") == []
+
+    def test_playbook_criteria_are_advisory_axioms(self, svc):
+        """Every criteria_ref must resolve to an advisory axiom — the §2 framing
+        that criteria inform judgment rather than gate it."""
+        pb = svc.playbooks_anchored_to("supply_planning")[0]
+        index = svc._axioms_by_name()
+        for crit in pb.body.decision.criteria_refs:
+            assert crit in index, f"{crit} should resolve to a declared axiom"
+            sev = index[crit].severity
+            sev = sev.value if hasattr(sev, "value") else sev
+            assert sev == "advisory"
+
+
+class TestTools:
+    """Phase 1.8 — Tools filtered by available_to."""
+
+    def test_supply_planning_sees_all_four_readers(self, svc):
+        names = [t.name for t in svc.tools_available_to("supply_planning")]
+        assert names == [
+            "query_commitments_in_window",
+            "query_line_load",
+            "query_plants_for_sku",
+            "query_supplier_for_sku",
+        ]
+
+    def test_production_planning_sees_only_line_load(self, svc):
+        names = [t.name for t in svc.tools_available_to("production_planning")]
+        assert names == ["query_line_load"]
+
+    def test_logistics_planning_sees_only_commitments(self, svc):
+        names = [t.name for t in svc.tools_available_to("logistics_planning")]
+        assert names == ["query_commitments_in_window"]
+
+    def test_tool_is_reader_with_contract_implementation(self, svc):
+        t = next(t for t in svc.tools_available_to("procurement")
+                 if t.name == "query_supplier_for_sku")
+        assert t.body.category == "reader"
+        assert t.body.implementation == "query_supplier_for_sku"
+        assert t.body.output_class == "Supplier"
+
+    def test_tools_sorted_by_name(self, svc):
+        names = [t.name for t in svc.tools_available_to("supply_planning")]
+        assert names == sorted(names)
+
+
 class TestQuantumSchemas:
     """Phase 1.5 — quantum + returns slot schemas surface in FlowSummary so
     the agent prompt teaches the LLM payload shape. Without this, Phase 2

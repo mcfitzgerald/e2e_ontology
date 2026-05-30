@@ -12,10 +12,16 @@ from .views import (
     EventSummary,
     FlowSummary,
     FSMSummary,
+    PlaybookCriterionView,
+    PlaybookEffectView,
+    PlaybookQueryStepView,
+    PlaybookResolutionView,
+    PlaybookSummary,
     QuantumSchema,
     QuantumSlotSchema,
     RoleIdentity,
     RoleView,
+    ToolSummary,
     TransitionSummary,
 )
 
@@ -31,5 +37,11 @@ __all__ = [
     "AxiomSummary",
     "QuantumSchema",
     "QuantumSlotSchema",
+    "PlaybookSummary",
+    "PlaybookQueryStepView",
+    "PlaybookCriterionView",
+    "PlaybookResolutionView",
+    "PlaybookEffectView",
+    "ToolSummary",
     "ORIENTATION",
 ]

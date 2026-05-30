@@ -14,9 +14,11 @@ from scont_bodies import (
     FlowBody,
     HumanInvolvement,
     MetricBody,
+    PlaybookBody,
     RoleBody,
     Severity,
     StateMachineBody,
+    ToolBody,
     TransitionBody,
 )
 
@@ -141,6 +143,28 @@ class TestAxiomBody:
         )
         assert a.severity == Severity.blocking.value
 
+    def test_with_tool_ref(self):
+        a = AxiomBody.model_validate(
+            {
+                "name": "line_capacity_not_exceeded",
+                "scope": "flow",
+                "expr": "sum_scheduled_units(...) <= cap",
+                "tool_ref": "evaluate_line_capacity_not_exceeded",
+                "nl": "Line capacity must not be exceeded.",
+                "severity": "blocking",
+            }
+        )
+        assert a.tool_ref == "evaluate_line_capacity_not_exceeded"
+        assert a.expr  # expr remains as documentation alongside tool_ref
+
+    def test_advisory_via_nl_only(self):
+        # Neither tool_ref nor expr — axiom is evaluated by an LLM reading nl.
+        a = AxiomBody.model_validate(
+            {"name": "n", "scope": "flow", "nl": "text"}
+        )
+        assert a.tool_ref is None
+        assert a.expr is None
+
 
 class TestStateMachineBody:
     def test_minimal_valid_with_from_state(self):
@@ -194,3 +218,110 @@ class TestMetricBody:
             }
         )
         assert m.promotion_target == "dbt"
+
+
+class TestPlaybookBody:
+    """Phase 1.8 — Playbook body shape. `llm_prompt_hint` is intentionally NOT
+    a body field (carried as a sibling annotation, like FlowBody); a body that
+    includes it must be rejected by extra=forbid."""
+
+    def _minimal(self):
+        return {
+            "role": "supply_planning",
+            "triggered_by": "capacity_conflict_detected",
+            "input_quantum": "CapacityConflict",
+        }
+
+    def test_minimal_valid(self):
+        p = PlaybookBody.model_validate(self._minimal())
+        assert p.role == "supply_planning"
+        assert p.context_assembly is None
+        assert p.decision is None
+        assert p.always_fires is None
+
+    def test_full_valid(self):
+        p = PlaybookBody.model_validate(
+            {
+                **self._minimal(),
+                "context_assembly": [
+                    {"flow": "check_otif_exposure", "required": True},
+                    {"flow": "check_coman_availability"},
+                ],
+                "synchronization": "wait_all",
+                "decision": {
+                    "criteria_refs": ["tolerable_otif_penalty"],
+                    "selects_one_of": ["shift_to_coman", "re_request_production"],
+                },
+                "always_fires": [
+                    {"event": "capacity_resolved"},
+                    {"flow": "plan_fulfillment"},
+                ],
+            }
+        )
+        assert p.synchronization == "wait_all"
+        assert [s.flow for s in p.context_assembly] == [
+            "check_otif_exposure", "check_coman_availability",
+        ]
+        # `required` defaults to None (the loader treats None as true).
+        assert p.context_assembly[1].required is None
+        assert p.decision.criteria_refs == ["tolerable_otif_penalty"]
+        assert p.always_fires[0].event == "capacity_resolved"
+        assert p.always_fires[1].flow == "plan_fulfillment"
+
+    def test_missing_required_field(self):
+        with pytest.raises(ValidationError):
+            PlaybookBody.model_validate({"role": "r", "triggered_by": "e"})
+
+    def test_invalid_synchronization(self):
+        with pytest.raises(ValidationError):
+            PlaybookBody.model_validate({**self._minimal(), "synchronization": "wait_some"})
+
+    def test_decision_requires_both_lists(self):
+        with pytest.raises(ValidationError):
+            PlaybookBody.model_validate(
+                {**self._minimal(), "decision": {"criteria_refs": ["x"]}}
+            )
+
+    def test_llm_prompt_hint_in_body_rejected(self):
+        """Hint is a sibling annotation, never a body field (FlowBody precedent)."""
+        with pytest.raises(ValidationError):
+            PlaybookBody.model_validate({**self._minimal(), "llm_prompt_hint": "x"})
+
+
+class TestToolBody:
+    """Phase 1.8 — Tool body shape."""
+
+    def _minimal(self):
+        return {
+            "description": "Reads lines for a SKU",
+            "category": "reader",
+            "input_class": "PlantQuery",
+            "output_class": "PlantQueryResult",
+            "implementation": "query_plants_for_sku",
+            "available_to": ["supply_planning"],
+        }
+
+    def test_minimal_valid(self):
+        t = ToolBody.model_validate(self._minimal())
+        assert t.category == "reader"
+        assert t.available_to == ["supply_planning"]
+        assert t.deterministic is None
+
+    def test_compute_category(self):
+        t = ToolBody.model_validate({**self._minimal(), "category": "compute", "deterministic": True})
+        assert t.category == "compute"
+        assert t.deterministic is True
+
+    def test_invalid_category(self):
+        with pytest.raises(ValidationError):
+            ToolBody.model_validate({**self._minimal(), "category": "writer"})
+
+    def test_missing_available_to(self):
+        body = self._minimal()
+        del body["available_to"]
+        with pytest.raises(ValidationError):
+            ToolBody.model_validate(body)
+
+    def test_llm_prompt_hint_in_body_rejected(self):
+        with pytest.raises(ValidationError):
+            ToolBody.model_validate({**self._minimal(), "llm_prompt_hint": "x"})

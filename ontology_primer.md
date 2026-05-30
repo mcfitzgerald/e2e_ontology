@@ -19,6 +19,8 @@ Tag dispatch:
 | `scont:InformationFlow` | Non-conserved handoff (signals, requests, approvals) | `scont:flow` (+ optional `scont:axioms`) |
 | `scont:MaterialFlow` | Mass-conserving physical handoff | `scont:flow` (+ optional `scont:axioms`) |
 | `scont:CashFlow` | Value-conserving, settlement-final | `scont:flow` (+ optional `scont:axioms`) |
+| `scont:Playbook` | Named multi-flow choreography anchored to a (role, event) pair | `scont:playbook` |
+| `scont:Tool` | Declared deterministic service an agent can invoke via `call_tool` | `scont:tool` |
 
 Every meta-typed element may carry an **`llm_prompt_hint`** written specifically to guide your navigation of that element. **Read hints before inferring from structure** — they often resolve ambiguity directly.
 
@@ -54,9 +56,34 @@ A `scont:axioms` body is a list. Each entry contains:
 - `name`, `scope` (`class` | `flow`), `severity` (`blocking` | `warning` | `advisory`)
 - `nl` — natural-language statement; always present; **use this for reasoning**
 - `expr` — optional Python-subset expression with `{slot.path}` references (LinkML `equals_expression` syntax)
+- `tool_ref` — optional; names a deterministic compute tool the orchestrator binds to a Python callable for evaluation. Use when the axiom needs world-state access (schedules, lead times, calendars) beyond `equals_expression`. **Precedence:** when both are present, `tool_ref` is the source of truth for evaluation and `expr` stays as documentation; `nl` remains authoritative for human/LLM reading regardless.
 - `message` — human-readable failure message
 - `references` — metrics, flows, or classes the axiom depends on
 - `on_failure_route_to` — optional; names the recovery flow when a blocking axiom fails
+
+## Playbook body
+
+A `scont:playbook` body anchors a multi-flow choreography to a `(role, event)` pair. It scaffolds **how** an agent assembles context and identifies the choice space for a class of situation; it never declares which choice to prefer (that stays agentic — the §2 world-vs-policy rule).
+
+- `role`, `triggered_by`, `input_quantum` — the structural anchor: which role runs this, on which event, carrying which quantum.
+- `context_assembly` — the query flows to fan out before deciding. Each step names a flow that has a `returns:` (a query flow). **Order is not priority or sequence** — the orchestrator composes responses per `synchronization`.
+- `synchronization` — `wait_all` (default; the decision sees every response) or `wait_any` (rare; only for interchangeable evidence).
+- `decision.criteria_refs` — names of **advisory** axioms the agent weighs as viability inputs. The orchestrator evaluates each against the assembled context; the agent reads typed pass/fail-style results, not just the names.
+- `decision.selects_one_of` — the resolution flows available. The agent picks exactly **one**. **Order is arbitrary** — the renderer presents the list neutralized (alphabetized) and the listed position carries no preference. A reader who treats the first entry as "the default" has reintroduced policy.
+- `always_fires` — events/flows that fire on **every** successful resolution, regardless of which path was chosen (structural post-resolution effects).
+
+The Playbook's `llm_prompt_hint` is a **sibling** `scont:llm_prompt_hint` annotation (same as flows), not a body field.
+
+## Tool body
+
+A `scont:tool` body declares a deterministic service an agent can invoke via `call_tool`. Two categories:
+
+- **reader** — reads world state; no side effects. Safe to call freely. (Prefer reading world state with a reader tool over inventing facts.)
+- **compute** — a pure function over typed input; no side effects.
+
+Fields: `description`, `category`, `input_class`, `output_class` (the typed input/output classes, validated by the orchestrator), `implementation` (a **contract name** the orchestrator binds to a Python callable at boot — it does not resolve to anything in the ontology, same shape as an axiom's `tool_ref`), and `available_to` (the role names that may invoke it — the role-view renderer filters tools by membership). `llm_prompt_hint` is a sibling annotation.
+
+The Tool registry is **separate** from the axiom `tool_ref` registry: Tools are agent-callable; axiom evaluators are internal to the deterministic backbone.
 
 ## Two reasoning modes
 
@@ -76,6 +103,9 @@ The ontology supports two distinct agent reasoning patterns. Recognize which one
 - **"Is this role inside the supply chain?"** → read `is_boundary` on the role body. Boundary roles are external; agents treat their outputs as facts-from-outside and their inputs as commitments, not operations.
 - **"Does this decision need a human?"** → read `human_involvement` on the role body. `conditional` means the orchestrator decides per-case; the ontology doesn't declare thresholds.
 - **"Is this a flow or a relation?"** → a flow has `instantiates: [scont:*Flow]` and a quantum. A relation is a slot on an entity class with a `range:` pointing at another class. Flows are *occurrences*; relations are *capabilities*.
+- **"What playbook fires when event X happens at role R?"** → find the `scont:Playbook` whose body has `role == R` and `triggered_by == X`. Single-playbook-per-(role, event) is enforced at validation, so there is at most one.
+- **"Which path should the playbook pick?"** → that is **not** in the ontology. `selects_one_of` lists the paths that are *available*; choosing among them is the agent's judgment. List order is arbitrary, never a ranking.
+- **"What tools can role R call?"** → filter all `scont:Tool` instances by `R in available_to`. Reader tools let you read world state instead of guessing it.
 
 ## Rules and gotchas
 

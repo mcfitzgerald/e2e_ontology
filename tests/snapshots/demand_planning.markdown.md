@@ -124,16 +124,16 @@ You have a fixed set of tools regardless of role. The mapping to your surface:
 - handoff(flow, quantum): your outgoing handoffs (submit_supply_request). Orchestrator validates the quantum and evaluates axioms before propagating.
 - query(flow, query_quantum): your outgoing queries (—). Awaits the typed response.
 - advance_fsm(quantum, trigger): lifecycle transition on a quantum you own (TradePromotionLifecycle). Orchestrator checks the guard and may route via `on_failure_route_to`.
-- call_tool(name, input): invoke a declared specialist tool. (No tools are declared yet — the Tool meta-construct lands in Phase 5.)
+- call_tool(name, input): invoke a declared tool available to you (—). Reader tools read world state — prefer them over inventing facts. See TOOLS AVAILABLE TO ME below.
 - surface_decision(...): your role's human_involvement is unspecified; the orchestrator's policy decides if and when a human is engaged.
 
 ## Playbooks anchored to me
 
-(none — Playbook meta-construct lands in Phase 5.)
+(none — no playbook is anchored to this role)
 
-## Specialist tools I can call
+## Tools available to me
 
-(none — Tool meta-construct lands in Phase 5.)
+(none — no tool lists this role in available_to)
 
 ## Advisory criteria (named viability inputs)
 

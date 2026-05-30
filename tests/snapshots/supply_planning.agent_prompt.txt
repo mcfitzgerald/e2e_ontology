@@ -171,6 +171,9 @@ OUTGOING QUERIES (WHAT I MAY ASK OF OTHERS)
       has_capacity: boolean (required) — True if the co-man can accept the volume in the requested window.
       premium_cost_per_unit: decimal (optional) — Incremental cost above internal production, per unit.
       lead_time_days: integer (optional) — Days from shift_to_coman acceptance to first output.
+    axioms:
+      - viable_coman_shift [flow, advisory]
+          Shifting production to a co-manufacturer (shift_to_coman) is a structurally viable resolution path only when a qualified co-man has capacity in the requested window — ComanAvailability.is_qualified AND has_capacity must both be true. An unqualified co-man or one without window capacity closes the path. The premium cost (premium_cost_per_unit) is an input the agent weighs against the other paths; this criterion reports availability, not whether paying the premium is the right call.
 - check_otif_exposure (information, to logistics_planning): quantum=OTIFQuery, returns=OTIFExposure
     hint: Query flow fired by supply_planning during Mode 2 context assembly after a CapacityConflict lands. Asks logistics_planning to quantify financial exposure if a given SKU ships a given number of days late to a given retailer. `returns: OTIFExposure` is the machine-validatable signal that this is request-response; the agent should wait for the response before choosing a resolution path. No trigger_event because this is ad-hoc during cross-domain reasoning. Complements check_promo_flexibility and check_coman_availability as the three canonical context-assembly queries.
     quantum OTIFQuery slots:
@@ -183,6 +186,9 @@ OUTGOING QUERIES (WHAT I MAY ASK OF OTHERS)
       delay_days: integer (required) — Assumed shipment delay relative to MABD.
       affected_shipment_value: decimal (required) — Dollar value of shipments that would miss MABD.
       calculated_penalty: decimal (required) — affected_shipment_value × otif_penalty_rate.
+    axioms:
+      - tolerable_otif_penalty [flow, advisory]
+          OTIF penalty exposure is a quantified input to the capacity-conflict trade-off, not a gate. This criterion surfaces the calculated penalty (OTIFExposure.calculated_penalty) and the affected shipment value so the agent can weigh accepting the delay against the cost of the alternative resolution paths. The ontology declares no threshold above which a penalty becomes intolerable — that judgment, and the line above which a human is engaged, belong to the agent and the orchestrator's policy, not the world model.
 - check_promo_flexibility (information, to customer_development): quantum=PromoFlexibilityQuery, returns=PromoFlexibility
     hint: Boundary-crossing query flow. Supply_planning asks customer_development whether a trade promotion can be shifted, reduced, or cancelled. Target role is_boundary: true — the response is a read on retailer-relationship sensitivity plus the promo's commitment_status, not a commitment to act. `returns: PromoFlexibility` signals request-response semantics. Used during Mode 2 context assembly to decide whether request_promo_revision is a viable resolution path for a CapacityConflict.
     quantum PromoFlexibilityQuery slots:
@@ -194,6 +200,9 @@ OUTGOING QUERIES (WHAT I MAY ASK OF OTHERS)
       can_shift_timing: boolean (required)
       can_reduce_volume: boolean (required)
       notes: string (optional) — Free-text context (e.g., relationship sensitivity).
+    axioms:
+      - viable_promo_renegotiation [flow, advisory]
+          Promo renegotiation (request_promo_revision) is a structurally viable resolution path only when the trade promotion's commitment_status is still negotiable — proposed or aligned are openly negotiable; committed requires formal renegotiation; contractually_locked closes the path. Viability also requires that at least one of the requested change kinds is permitted: PromoFlexibility.can_shift_timing or can_reduce_volume must be true. This criterion reports whether the path is open, not whether it should be preferred over the alternatives.
 
 ---
 EVENTS THAT ARRIVE AT ME (TRIGGER MY INCOMING FLOWS)
@@ -261,20 +270,55 @@ You have a fixed set of tools regardless of role. The mapping to your surface:
 - handoff(flow, quantum): your outgoing handoffs (plan_fulfillment, re_request_production, request_production, request_promo_revision, shift_to_coman, submit_procurement_request). Orchestrator validates the quantum and evaluates axioms before propagating.
 - query(flow, query_quantum): your outgoing queries (check_coman_availability, check_otif_exposure, check_promo_flexibility). Awaits the typed response.
 - advance_fsm(quantum, trigger): lifecycle transition on a quantum you own (ProductionRequestLifecycle, RequestLifecycle, TradePromotionLifecycle). Orchestrator checks the guard and may route via `on_failure_route_to`.
-- call_tool(name, input): invoke a declared specialist tool. (No tools are declared yet — the Tool meta-construct lands in Phase 5.)
+- call_tool(name, input): invoke a declared tool available to you (query_commitments_in_window, query_line_load, query_plants_for_sku, query_supplier_for_sku). Reader tools read world state — prefer them over inventing facts. See TOOLS AVAILABLE TO ME below.
 - surface_decision(...): your role has human_involvement=conditional; the orchestrator owns thresholds and mechanisms for when a human is engaged.
 
 ---
 PLAYBOOKS ANCHORED TO ME
 
-(none — Playbook meta-construct lands in Phase 5.)
+- resolve_capacity_conflict
+    triggered_by: capacity_conflict_detected
+    input_quantum: CapacityConflict
+    context_assembly (parallel, wait_all):
+      - check_coman_availability  (returns ComanAvailability)
+      - check_otif_exposure  (returns OTIFExposure)
+      - check_promo_flexibility  (returns PromoFlexibility)
+    advisory criteria (evaluated against assembled context at decision time):
+      - tolerable_otif_penalty: OTIF penalty exposure is a quantified input to the capacity-conflict trade-off, not a gate. This criterion surfaces the calculated penalty (OTIFExposure.calculated_penalty) and the affected shipment value so the agent can weigh accepting the delay against the cost of the alternative resolution paths. The ontology declares no threshold above which a penalty becomes intolerable — that judgment, and the line above which a human is engaged, belong to the agent and the orchestrator's policy, not the world model.
+      - viable_coman_shift: Shifting production to a co-manufacturer (shift_to_coman) is a structurally viable resolution path only when a qualified co-man has capacity in the requested window — ComanAvailability.is_qualified AND has_capacity must both be true. An unqualified co-man or one without window capacity closes the path. The premium cost (premium_cost_per_unit) is an input the agent weighs against the other paths; this criterion reports availability, not whether paying the premium is the right call.
+      - viable_promo_renegotiation: Promo renegotiation (request_promo_revision) is a structurally viable resolution path only when the trade promotion's commitment_status is still negotiable — proposed or aligned are openly negotiable; committed requires formal renegotiation; contractually_locked closes the path. Viability also requires that at least one of the requested change kinds is permitted: PromoFlexibility.can_shift_timing or can_reduce_volume must be true. This criterion reports whether the path is open, not whether it should be preferred over the alternatives.
+    resolution paths (pick one; order arbitrary):
+      - re_request_production  (to production_planning)
+      - request_promo_revision  (to customer_development)
+      - shift_to_coman  (to co_manufacturing)
+    always fires on completion:
+      - event: capacity_resolved
+      - flow: plan_fulfillment
+    hint: Cross-domain conflict resolution. The three context-assembly queries gather typed evidence from logistics (OTIF exposure), commercial (promo flexibility), and external co-manufacturing (availability + premium). The decision is yours — weigh the three advisory criteria against the assembled responses and pick one resolution path. The listed order of the paths is not a ranking. The orchestrator surfaces the decision to a human per its human_involvement policy on supply_planning.
 
 ---
-SPECIALIST TOOLS I CAN CALL
+TOOLS AVAILABLE TO ME
 
-(none — Tool meta-construct lands in Phase 5.)
+(reader) query_commitments_in_window: Returns retailer commitments touching a (sku, retailer, window).
+    input:  CommitmentQuery (sku: SKU, retailer: string, window_start_day: integer, window_end_day: integer)
+    output: CommitmentQueryResult (commitments: RetailerCommitment[])
+    hint: Read the real retailer commitments at risk in a window rather than inferring them. Feeds the OTIF exposure reasoning during Mode 2 context assembly.
+(reader) query_line_load: Returns scheduled production load on a (plant, line) for a window, from the world-state production schedule.
+    input:  LineLoadQuery (plant_code: string, line_code: string, window_start_day: integer, window_end_day: integer)
+    output: LineLoad (plant_code: string, line_code: string, window_start_day: integer, window_end_day: integer, scheduled_units: decimal)
+    hint: Read current scheduled load before proposing or re-proposing production on a line. The line_capacity_not_exceeded axiom evaluates the same world-state schedule deterministically; this tool lets the agent check feasibility up front so the guard passes on first try.
+(reader) query_plants_for_sku: Returns the production lines (plant + line + capacity) that can produce the given SKU, based on world state.
+    input:  PlantQuery (sku: SKU)
+    output: PlantQueryResult (lines: ProductionLine[])
+    hint: Use before assigning production: read which lines can actually make the SKU rather than guessing plant/line codes. Pairs with query_line_load to check whether a candidate line has room in the window.
+(reader) query_supplier_for_sku: Returns the supplier (with lead time) that provides raw materials for the given SKU.
+    input:  SupplierQuery (sku: SKU)
+    output: Supplier (supplier_code: string, name: string, country: string, lead_time_days: integer, active: boolean)
+    hint: Read the actual supplier and its committed lead time before drafting a ProcurementRequest. The respect_lead_time axiom evaluates against this same lead time; reading it up front keeps required-by dates feasible.
 
 ---
 ADVISORY CRITERIA (NAMED VIABILITY INPUTS)
 
-(none — no advisory axioms attached to flows I touch.)
+- viable_coman_shift: Shifting production to a co-manufacturer (shift_to_coman) is a structurally viable resolution path only when a qualified co-man has capacity in the requested window — ComanAvailability.is_qualified AND has_capacity must both be true. An unqualified co-man or one without window capacity closes the path. The premium cost (premium_cost_per_unit) is an input the agent weighs against the other paths; this criterion reports availability, not whether paying the premium is the right call.
+- tolerable_otif_penalty: OTIF penalty exposure is a quantified input to the capacity-conflict trade-off, not a gate. This criterion surfaces the calculated penalty (OTIFExposure.calculated_penalty) and the affected shipment value so the agent can weigh accepting the delay against the cost of the alternative resolution paths. The ontology declares no threshold above which a penalty becomes intolerable — that judgment, and the line above which a human is engaged, belong to the agent and the orchestrator's policy, not the world model.
+- viable_promo_renegotiation: Promo renegotiation (request_promo_revision) is a structurally viable resolution path only when the trade promotion's commitment_status is still negotiable — proposed or aligned are openly negotiable; committed requires formal renegotiation; contractually_locked closes the path. Viability also requires that at least one of the requested change kinds is permitted: PromoFlexibility.can_shift_timing or can_reduce_volume must be true. This criterion reports whether the path is open, not whether it should be preferred over the alternatives.

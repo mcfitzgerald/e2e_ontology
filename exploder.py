@@ -44,6 +44,8 @@ from scont_bodies import (
     StateMachineBody,
     TransitionBody,
     MetricBody,
+    PlaybookBody,
+    ToolBody,
 )
 
 
@@ -55,6 +57,8 @@ TAG_ROLE = "scont:Role"
 TAG_EVENT = "scont:Event"
 TAG_STATE_MACHINE = "scont:StateMachine"
 TAG_FLOW = "scont:Flow"
+TAG_PLAYBOOK = "scont:Playbook"
+TAG_TOOL = "scont:Tool"
 _FLOW_KIND_BY_TAG = {
     "scont:InformationFlow": "information",
     "scont:MaterialFlow": "material",
@@ -65,6 +69,8 @@ ANN_ROLE = "scont:role"
 ANN_EVENT = "scont:event"
 ANN_STATE_MACHINE = "scont:state_machine"
 ANN_FLOW = "scont:flow"
+ANN_PLAYBOOK = "scont:playbook"
+ANN_TOOL = "scont:tool"
 ANN_AXIOMS = "scont:axioms"
 ANN_METRICS = "scont:metrics"
 ANN_LLM_PROMPT_HINT = "scont:llm_prompt_hint"
@@ -107,6 +113,24 @@ class ResolvedFlow:
     kind: str  # information | material | cash
     body: FlowBody
     axioms: tuple[AxiomBody, ...]
+    llm_prompt_hint: str | None
+    domain: str | None = None
+    subdomain: str | None = None
+
+
+@dataclass(frozen=True)
+class ResolvedPlaybook:
+    name: str
+    body: PlaybookBody
+    llm_prompt_hint: str | None
+    domain: str | None = None
+    subdomain: str | None = None
+
+
+@dataclass(frozen=True)
+class ResolvedTool:
+    name: str
+    body: ToolBody
     llm_prompt_hint: str | None
     domain: str | None = None
     subdomain: str | None = None
@@ -170,6 +194,8 @@ class Ontology:
     events: dict[str, ResolvedEvent] = field(default_factory=dict)
     state_machines: dict[str, ResolvedStateMachine] = field(default_factory=dict)
     flows: dict[str, ResolvedFlow] = field(default_factory=dict)
+    playbooks: dict[str, ResolvedPlaybook] = field(default_factory=dict)
+    tools: dict[str, ResolvedTool] = field(default_factory=dict)
     enums: dict[str, dict[str, Any]] = field(default_factory=dict)
     warnings: list[ValidationIssue] = field(default_factory=list)
 
@@ -184,6 +210,8 @@ class Ontology:
             f"{len(self.events)} events, "
             f"{len(self.state_machines)} state machines, "
             f"{len(self.flows)} flows, "
+            f"{len(self.playbooks)} playbooks, "
+            f"{len(self.tools)} tools, "
             f"{len(self.enums)} enums"
         )
 
@@ -199,6 +227,8 @@ class Ontology:
                 for k, v in self.state_machines.items()
             },
             "flows": {k: self._flow_summary(v) for k, v in self.flows.items()},
+            "playbooks": {k: self._playbook_summary(v) for k, v in self.playbooks.items()},
+            "tools": {k: self._tool_summary(v) for k, v in self.tools.items()},
             "enums": list(self.enums.keys()),
             "warnings": [w.format() for w in self.warnings],
         }
@@ -236,6 +266,31 @@ class Ontology:
             "domain": f.domain,
         }
 
+    @staticmethod
+    def _playbook_summary(p: ResolvedPlaybook) -> dict[str, Any]:
+        b = p.body
+        return {
+            "role": b.role,
+            "triggered_by": b.triggered_by,
+            "input_quantum": b.input_quantum,
+            "context_assembly": [s.flow for s in (b.context_assembly or [])],
+            "criteria_refs": list(b.decision.criteria_refs) if b.decision else [],
+            "selects_one_of": list(b.decision.selects_one_of) if b.decision else [],
+            "domain": p.domain,
+        }
+
+    @staticmethod
+    def _tool_summary(t: ResolvedTool) -> dict[str, Any]:
+        b = t.body
+        return {
+            "category": b.category,
+            "input_class": b.input_class,
+            "output_class": b.output_class,
+            "implementation": b.implementation,
+            "available_to": list(b.available_to),
+            "domain": t.domain,
+        }
+
     # ------------------------------------------------------------------
     # Query API — scont-level (LinkML-level queries go via self.schema_view)
     # ------------------------------------------------------------------
@@ -254,6 +309,22 @@ class Ontology:
 
     def get_state_machine(self, name: str) -> ResolvedStateMachine | None:
         return self.state_machines.get(name)
+
+    def get_playbook(self, name: str) -> ResolvedPlaybook | None:
+        return self.playbooks.get(name)
+
+    def get_tool(self, name: str) -> ResolvedTool | None:
+        return self.tools.get(name)
+
+    def playbooks_for_role(self, role: str) -> list[ResolvedPlaybook]:
+        """Playbooks anchored to this role (body.role == role). Sorted by name."""
+        out = [p for p in self.playbooks.values() if p.body.role == role]
+        return sorted(out, key=lambda p: p.name)
+
+    def tools_for_role(self, role: str) -> list[ResolvedTool]:
+        """Tools this role may invoke (role in body.available_to). Sorted by name."""
+        out = [t for t in self.tools.values() if role in (t.body.available_to or [])]
+        return sorted(out, key=lambda t: t.name)
 
     def list_flows_where(
         self,
@@ -725,6 +796,48 @@ def _build_flow(
     )
 
 
+def _build_playbook(
+    name: str, anns: dict[str, Any], issues: list[ValidationIssue]
+) -> ResolvedPlaybook | None:
+    raw = _parse_json_annotation(anns.get(ANN_PLAYBOOK), f"{name}.{ANN_PLAYBOOK}") or {}
+    if not isinstance(raw, dict):
+        issues.append(ValidationIssue("error", name, ANN_PLAYBOOK, f"expected object, got {type(raw).__name__}"))
+        return None
+    try:
+        body = PlaybookBody.model_validate(raw)
+    except pydantic.ValidationError as exc:
+        issues.extend(_collect_validation_errors(exc, name, ANN_PLAYBOOK))
+        return None
+    return ResolvedPlaybook(
+        name=name,
+        body=body,
+        llm_prompt_hint=anns.get(ANN_LLM_PROMPT_HINT),
+        domain=anns.get(ANN_DOMAIN),
+        subdomain=anns.get(ANN_SUBDOMAIN),
+    )
+
+
+def _build_tool(
+    name: str, anns: dict[str, Any], issues: list[ValidationIssue]
+) -> ResolvedTool | None:
+    raw = _parse_json_annotation(anns.get(ANN_TOOL), f"{name}.{ANN_TOOL}") or {}
+    if not isinstance(raw, dict):
+        issues.append(ValidationIssue("error", name, ANN_TOOL, f"expected object, got {type(raw).__name__}"))
+        return None
+    try:
+        body = ToolBody.model_validate(raw)
+    except pydantic.ValidationError as exc:
+        issues.extend(_collect_validation_errors(exc, name, ANN_TOOL))
+        return None
+    return ResolvedTool(
+        name=name,
+        body=body,
+        llm_prompt_hint=anns.get(ANN_LLM_PROMPT_HINT),
+        domain=anns.get(ANN_DOMAIN),
+        subdomain=anns.get(ANN_SUBDOMAIN),
+    )
+
+
 def _build_entity(
     name: str, class_body: dict[str, Any], anns: dict[str, Any], issues: list[ValidationIssue]
 ) -> ResolvedEntity:
@@ -823,6 +936,18 @@ def load_ontology(path: str | Path, strict_warnings: bool = False) -> Ontology:
                     ontology.flows[name] = flow
                 handled = True
                 break
+            if tag == TAG_PLAYBOOK:
+                playbook = _build_playbook(name, anns, issues)
+                if playbook:
+                    ontology.playbooks[name] = playbook
+                handled = True
+                break
+            if tag == TAG_TOOL:
+                tool = _build_tool(name, anns, issues)
+                if tool:
+                    ontology.tools[name] = tool
+                handled = True
+                break
 
         if not handled:
             # Unknown tag — treat as a plain entity so we don't lose it
@@ -859,6 +984,8 @@ def _all_class_names(ontology: Ontology) -> set[str]:
         | set(ontology.events)
         | set(ontology.state_machines)
         | set(ontology.flows)
+        | set(ontology.playbooks)
+        | set(ontology.tools)
     )
 
 
@@ -977,6 +1104,126 @@ def _resolve_cross_references(ontology: Ontology, issues: list[ValidationIssue])
                     )
                 )
 
+    # Playbook + Tool cross-refs (Phase 1.8)
+    _resolve_playbook_references(ontology, issues, known_classes)
+    _resolve_tool_references(ontology, issues, known_classes)
+
+
+def _axiom_severity_index(ontology: Ontology) -> dict[str, str | None]:
+    """Map every flow-declared axiom name to its severity string. Used to
+    validate Playbook decision.criteria_refs resolve to *advisory* axioms.
+    Severity is already a string under use_enum_values; normalize defensively."""
+    index: dict[str, str | None] = {}
+    for flow in ontology.flows.values():
+        for ax in flow.axioms:
+            sev = ax.severity
+            index[ax.name] = sev.value if hasattr(sev, "value") else sev
+    return index
+
+
+def _resolve_playbook_references(
+    ontology: Ontology, issues: list[ValidationIssue], known_classes: set[str]
+) -> None:
+    severities = _axiom_severity_index(ontology)
+    seen_anchors: dict[tuple[str, str], str] = {}
+
+    for pb in ontology.playbooks.values():
+        where = pb.name
+        b = pb.body
+        if b.role not in ontology.roles:
+            issues.append(ValidationIssue("error", where, "role", f"{b.role!r} is not a declared Role"))
+        if b.triggered_by not in ontology.events:
+            issues.append(ValidationIssue("error", where, "triggered_by", f"{b.triggered_by!r} is not a declared Event"))
+        if b.input_quantum not in known_classes:
+            issues.append(ValidationIssue("error", where, "input_quantum", f"{b.input_quantum!r} is not a declared class"))
+
+        # context_assembly[].flow must resolve to a query flow (returns: set)
+        for i, step in enumerate(b.context_assembly or []):
+            target = ontology.flows.get(step.flow)
+            if target is None:
+                issues.append(
+                    ValidationIssue("error", where, f"context_assembly[{i}].flow", f"{step.flow!r} is not a declared flow")
+                )
+            elif not target.body.returns:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        where,
+                        f"context_assembly[{i}].flow",
+                        f"{step.flow!r} is not a query flow (no `returns:` — context assembly needs request-response flows)",
+                    )
+                )
+
+        if b.decision is not None:
+            for i, crit in enumerate(b.decision.criteria_refs or []):
+                if crit not in severities:
+                    issues.append(
+                        ValidationIssue("error", where, f"decision.criteria_refs[{i}]", f"{crit!r} does not resolve to any declared axiom")
+                    )
+                elif severities[crit] != "advisory":
+                    issues.append(
+                        ValidationIssue(
+                            "error",
+                            where,
+                            f"decision.criteria_refs[{i}]",
+                            f"{crit!r} is severity {severities[crit]!r}; criteria_refs must reference advisory axioms",
+                        )
+                    )
+            for i, res in enumerate(b.decision.selects_one_of or []):
+                if res not in ontology.flows:
+                    issues.append(
+                        ValidationIssue("error", where, f"decision.selects_one_of[{i}]", f"{res!r} is not a declared flow")
+                    )
+
+        # always_fires[] — exactly one of event/flow, and it must resolve
+        for i, eff in enumerate(b.always_fires or []):
+            if bool(eff.event) == bool(eff.flow):
+                issues.append(
+                    ValidationIssue("error", where, f"always_fires[{i}]", "exactly one of `event` / `flow` must be set")
+                )
+            if eff.event and eff.event not in ontology.events:
+                issues.append(
+                    ValidationIssue("error", where, f"always_fires[{i}].event", f"{eff.event!r} is not a declared Event")
+                )
+            if eff.flow and eff.flow not in ontology.flows:
+                issues.append(
+                    ValidationIssue("error", where, f"always_fires[{i}].flow", f"{eff.flow!r} is not a declared flow")
+                )
+
+        # Single-playbook-per-(role, triggered_by) — §12.4 defaulted answer.
+        anchor = (b.role, b.triggered_by)
+        if anchor in seen_anchors:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    where,
+                    "role/triggered_by",
+                    f"duplicate playbook anchor ({b.role}, {b.triggered_by}); already claimed by "
+                    f"{seen_anchors[anchor]!r}. Single-playbook-per-(role, event) is enforced.",
+                )
+            )
+        else:
+            seen_anchors[anchor] = pb.name
+
+
+def _resolve_tool_references(
+    ontology: Ontology, issues: list[ValidationIssue], known_classes: set[str]
+) -> None:
+    for tool in ontology.tools.values():
+        where = tool.name
+        b = tool.body
+        if b.input_class not in known_classes:
+            issues.append(ValidationIssue("error", where, "input_class", f"{b.input_class!r} is not a declared class"))
+        if b.output_class not in known_classes:
+            issues.append(ValidationIssue("error", where, "output_class", f"{b.output_class!r} is not a declared class"))
+        for i, role in enumerate(b.available_to or []):
+            if role not in ontology.roles:
+                issues.append(
+                    ValidationIssue("error", where, f"available_to[{i}]", f"{role!r} is not a declared Role")
+                )
+        # `implementation` is a contract name bound by the orchestrator at boot;
+        # it intentionally does not resolve to anything in the ontology.
+
 
 # ============================================================================
 # Convention / warning checks
@@ -1000,6 +1247,8 @@ def _check_conventions(ontology: Ontology, issues: list[ValidationIssue]) -> Non
         ("event", ontology.events.values()),
         ("state_machine", ontology.state_machines.values()),
         ("flow", ontology.flows.values()),
+        ("playbook", ontology.playbooks.values()),
+        ("tool", ontology.tools.values()),
         ("entity", ontology.entities.values()),
     ):
         for item in group:
@@ -1026,6 +1275,20 @@ def _check_conventions(ontology: Ontology, issues: list[ValidationIssue]) -> Non
             referenced_fsms.add(flow.body.lifecycle_ref)
     for event in ontology.events.values():
         referenced_roles.add(event.body.observed_by)
+    # Playbooks and tools also reference roles/events/classes — count them so a
+    # role/event used only by a playbook or tool isn't flagged unused.
+    for pb in ontology.playbooks.values():
+        referenced_roles.add(pb.body.role)
+        referenced_events.add(pb.body.triggered_by)
+        referenced_classes.add(pb.body.input_quantum)
+        for eff in pb.body.always_fires or []:
+            if eff.event:
+                referenced_events.add(eff.event)
+    for tool in ontology.tools.values():
+        for role in tool.body.available_to or []:
+            referenced_roles.add(role)
+        referenced_classes.add(tool.body.input_class)
+        referenced_classes.add(tool.body.output_class)
 
     for name in ontology.roles:
         if name not in referenced_roles:
@@ -1140,6 +1403,16 @@ def _print_summary(ontology: Ontology) -> None:
             suffix_parts.append(f"returns={f.body.returns}")
         suffix = f", {', '.join(suffix_parts)}" if suffix_parts else ""
         print(f"  - {f.name} [{f.kind}]: {f.body.source_role} → {f.body.target_role}, quantum={f.body.quantum}{suffix}")
+    if ontology.playbooks:
+        print()
+        print("Playbooks:")
+        for p in ontology.playbooks.values():
+            print(f"  - {p.name}: anchored to ({p.body.role}, {p.body.triggered_by})")
+    if ontology.tools:
+        print()
+        print("Tools:")
+        for t in ontology.tools.values():
+            print(f"  - {t.name} [{t.body.category}]: {t.body.input_class} → {t.body.output_class}, available_to={', '.join(t.body.available_to)}")
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -1191,6 +1464,8 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         ("role", ontology.get_role),
         ("event", ontology.get_event),
         ("state_machine", ontology.get_state_machine),
+        ("playbook", ontology.get_playbook),
+        ("tool", ontology.get_tool),
         ("entity", ontology.get_entity),
     ):
         item = getter(name)
@@ -1245,6 +1520,32 @@ def _inspect_dict(item: Any) -> dict[str, Any]:
             ],
             "initial": item.body.initial,
             "terminal": item.body.terminal,
+        }
+    if isinstance(item, ResolvedPlaybook):
+        b = item.body
+        return {
+            "role": b.role,
+            "triggered_by": b.triggered_by,
+            "input_quantum": b.input_quantum,
+            "context_assembly": [s.flow for s in (b.context_assembly or [])],
+            "synchronization": b.synchronization,
+            "criteria_refs": list(b.decision.criteria_refs) if b.decision else [],
+            "selects_one_of": list(b.decision.selects_one_of) if b.decision else [],
+            "always_fires": [e.event or e.flow for e in (b.always_fires or [])],
+            "llm_prompt_hint": item.llm_prompt_hint,
+            "domain": item.domain,
+        }
+    if isinstance(item, ResolvedTool):
+        b = item.body
+        return {
+            "category": b.category,
+            "description": b.description,
+            "input_class": b.input_class,
+            "output_class": b.output_class,
+            "implementation": b.implementation,
+            "available_to": list(b.available_to),
+            "llm_prompt_hint": item.llm_prompt_hint,
+            "domain": item.domain,
         }
     if isinstance(item, ResolvedEntity):
         return {

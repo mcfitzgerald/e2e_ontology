@@ -355,3 +355,188 @@ classes:
         ontology = load_ontology(path)
         unused_warnings = [w for w in ontology.warnings if w.element == "unused_role" and "not referenced" in w.message]
         assert unused_warnings
+
+
+# ============================================================================
+# Playbook + Tool cross-references (Phase 1.8)
+# ============================================================================
+
+
+def _pb_base(extra: str) -> str:
+    """role_a/role_b/e1/Payload + a query flow carrying one advisory and one
+    blocking axiom, plus a handoff resolution flow. `extra` appends a playbook
+    or tool to exercise."""
+    return _classes_block("x") + """
+  qflow:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: dom
+      scont:flow: >-
+        {"source_role": "role_a", "target_role": "role_b", "quantum": "Payload",
+         "returns": "Payload"}
+      scont:axioms: >-
+        [ {"name": "crit_adv", "scope": "flow", "nl": "advisory criterion", "severity": "advisory"},
+          {"name": "crit_block", "scope": "flow", "nl": "blocking", "severity": "blocking"} ]
+      scont:llm_prompt_hint: "query"
+  res_flow:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: dom
+      scont:flow: >-
+        {"source_role": "role_a", "target_role": "role_b", "quantum": "Payload"}
+      scont:llm_prompt_hint: "resolution"
+""" + extra
+
+
+class TestPlaybookCrossReferences:
+    def test_valid_playbook_loads(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  pb_ok:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload",
+         "context_assembly": [{"flow": "qflow", "required": true}],
+         "synchronization": "wait_all",
+         "decision": {"criteria_refs": ["crit_adv"], "selects_one_of": ["res_flow"]},
+         "always_fires": [{"flow": "res_flow"}]}
+      scont:llm_prompt_hint: "ok"
+""")
+        ontology = load_ontology(write_yaml(src))
+        assert "pb_ok" in ontology.playbooks
+        assert ontology.playbooks_for_role("role_a")[0].name == "pb_ok"
+
+    def test_criteria_must_be_advisory(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  pb_bad:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload",
+         "decision": {"criteria_refs": ["crit_block"], "selects_one_of": ["res_flow"]}}
+      scont:llm_prompt_hint: "bad"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        assert any("advisory" in i.message for i in exc.value.issues)
+
+    def test_selects_one_of_must_be_flow(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  pb_bad:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload",
+         "decision": {"criteria_refs": ["crit_adv"], "selects_one_of": ["ghost_flow"]}}
+      scont:llm_prompt_hint: "bad"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        assert any("selects_one_of" in (i.field or "") for i in exc.value.issues)
+
+    def test_context_assembly_must_be_query_flow(self, write_yaml, preamble):
+        # res_flow has no `returns:`, so it can't be a context-assembly step.
+        src = preamble + _pb_base("""
+  pb_bad:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload",
+         "context_assembly": [{"flow": "res_flow"}]}
+      scont:llm_prompt_hint: "bad"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        assert any("query flow" in i.message for i in exc.value.issues)
+
+    def test_single_playbook_per_anchor_enforced(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  pb_one:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload"}
+      scont:llm_prompt_hint: "one"
+  pb_two:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload"}
+      scont:llm_prompt_hint: "two"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        assert any("duplicate playbook anchor" in i.message for i in exc.value.issues)
+
+
+class TestToolCrossReferences:
+    def test_valid_tool_loads(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  tool_ok:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: dom
+      scont:tool: >-
+        {"description": "d", "category": "reader", "input_class": "Payload",
+         "output_class": "Payload", "implementation": "do_it",
+         "available_to": ["role_a"]}
+      scont:llm_prompt_hint: "ok"
+""")
+        ontology = load_ontology(write_yaml(src))
+        assert "tool_ok" in ontology.tools
+        assert ontology.tools_for_role("role_a")[0].name == "tool_ok"
+
+    def test_unknown_input_class(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  tool_bad:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: dom
+      scont:tool: >-
+        {"description": "d", "category": "reader", "input_class": "Ghost",
+         "output_class": "Payload", "implementation": "do_it",
+         "available_to": ["role_a"]}
+      scont:llm_prompt_hint: "bad"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        assert any(i.field == "input_class" for i in exc.value.issues)
+
+    def test_unknown_available_to_role(self, write_yaml, preamble):
+        src = preamble + _pb_base("""
+  tool_bad:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: dom
+      scont:tool: >-
+        {"description": "d", "category": "reader", "input_class": "Payload",
+         "output_class": "Payload", "implementation": "do_it",
+         "available_to": ["ghost_role"]}
+      scont:llm_prompt_hint: "bad"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        assert any("available_to" in (i.field or "") for i in exc.value.issues)
+
+    def test_implementation_need_not_resolve(self, write_yaml, preamble):
+        """`implementation` is a contract name bound at boot — it must NOT be
+        required to resolve to anything in the ontology."""
+        src = preamble + _pb_base("""
+  tool_ok:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: dom
+      scont:tool: >-
+        {"description": "d", "category": "compute", "input_class": "Payload",
+         "output_class": "Payload", "implementation": "nonexistent.callable.v1",
+         "available_to": ["role_a"]}
+      scont:llm_prompt_hint: "ok"
+""")
+        ontology = load_ontology(write_yaml(src))  # no error
+        assert ontology.get_tool("tool_ok").body.implementation == "nonexistent.callable.v1"

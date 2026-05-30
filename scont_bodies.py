@@ -29,7 +29,7 @@ from pydantic import (
 )
 
 
-metamodel_version = "1.7.0"
+metamodel_version = "1.11.0"
 version = "0.1.0"
 
 
@@ -181,6 +181,34 @@ class MetricSource(str, Enum):
     """
 
 
+class PlaybookSynchronization(str, Enum):
+    """
+    Wait semantics for a Playbook's context_assembly fan-out. Declares how the orchestrator composes the typed query responses before surfacing the decision. World content (composition mechanics), not policy.
+    """
+    wait_all = "wait_all"
+    """
+    Decision proceeds only when every required query has responded.
+    """
+    wait_any = "wait_any"
+    """
+    Decision can proceed on the first response. Legitimate only when the responses are interchangeable evidence; rare and needs justification.
+    """
+
+
+class ToolCategory(str, Enum):
+    """
+    Category of a declared Tool. Both categories are deterministic and free of side effects; the distinction tells the agent whether the tool reads world state or computes a pure function.
+    """
+    reader = "reader"
+    """
+    Reads world state; no side effects. Safe to call freely.
+    """
+    compute = "compute"
+    """
+    Pure function over typed input; no side effects.
+    """
+
+
 
 class RoleBody(ConfiguredBaseModel):
     """
@@ -189,7 +217,7 @@ class RoleBody(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:RoleBody',
          'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
 
-    description: str = Field(default=..., description="""One-line human description of what this role is responsible for in the supply chain.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody']} })
+    description: str = Field(default=..., description="""One-line human description of what this role is responsible for in the supply chain.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody', 'ToolBody']} })
     llm_prompt_hint: str = Field(default=..., description="""Navigation/reasoning aid for an LLM agent consuming this role: what signals it owns, what flows it participates in, what gotchas exist, how it relates to adjacent roles.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody']} })
     is_boundary: Optional[bool] = Field(default=None, description="""True if this role represents an external function the ontology does not model (commercial/customer development, co-manufacturer, regulatory body, etc.). Boundary roles participate in flows crossing the SC boundary but their internals are outside scope.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody']} })
     human_involvement: Optional[HumanInvolvement] = Field(default=None, description="""Autonomy envelope for this role. Ontology declares the domain truth (\"this role may require a human for complex decisions\"); the orchestrator decides when and how based on its policy.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody']} })
@@ -203,7 +231,7 @@ class EventBody(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:EventBody',
          'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
 
-    description: str = Field(default=..., description="""One-line description of what this event represents.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody']} })
+    description: str = Field(default=..., description="""One-line description of what this event represents.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody', 'ToolBody']} })
     observed_by: str = Field(default=..., description="""Name of the Role that produces or detects this event. Must resolve to a declared Role in the ontology.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EventBody']} })
     llm_prompt_hint: str = Field(default=..., description="""Navigation aid: when this event fires, what downstream flows are triggered, what upstream signal produced it, what an agent should do when it observes it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody']} })
 
@@ -246,6 +274,7 @@ class AxiomBody(ConfiguredBaseModel):
     name: str = Field(default=..., description="""Unique axiom name. Used for cross-references (including the convention that an FSM transition's `guard` field matches an axiom name on the parent flow).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody', 'MetricBody']} })
     scope: Scope = Field(default=..., description="""Whether the axiom attaches to a class (invariant on the class's instance data) or a flow (invariant on the handoff).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody']} })
     expr: Optional[str] = Field(default=None, description="""Optional machine-evaluable expression in LinkML's `equals_expression` syntax. Slot names in curly braces; Python-subset operators and comparisons. Evaluates to None on missing values. When absent, the axiom is evaluated by the LLM reading `nl`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody', 'MetricBody']} })
+    tool_ref: Optional[str] = Field(default=None, description="""Name of a deterministic compute tool that evaluates this axiom. When present, the orchestrator binds the name to a Python callable at boot; the axiom evaluator dispatches to it rather than parsing `expr`. Use for axioms requiring world-state access (schedules, lead times, calendars) that exceed `equals_expression` syntax. `tool_ref` wins over `expr` when both are present; `nl` remains authoritative for human/LLM reading.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody']} })
     nl: str = Field(default=..., description="""Natural-language statement of the axiom. Always required. Survives schema refactors where `expr` may break. Read by LLM validators and by agents as navigation context.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody']} })
     severity: Optional[Severity] = Field(default=None, description="""Severity level controlling agent response to a violation.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody']} })
     message: Optional[str] = Field(default=None, description="""Short message emitted when the axiom is violated.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AxiomBody']} })
@@ -298,6 +327,71 @@ class MetricBody(ConfiguredBaseModel):
     promotion_target: Optional[str] = Field(default=None, description="""Optional hint that this local metric is a candidate for future promotion to the dbt semantic layer. Informational.""", json_schema_extra = { "linkml_meta": {'domain_of': ['MetricBody']} })
 
 
+class PlaybookQueryStep(ConfiguredBaseModel):
+    """
+    One context-assembly step in a Playbook: a query flow the anchored role fans out to gather typed context before the decision.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:PlaybookQueryStep',
+         'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
+
+    flow: str = Field(default=..., description="""Query flow name. Must resolve to a declared flow with `returns:` set (i.e. a request-response query flow).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookQueryStep', 'PlaybookAlwaysFires']} })
+    required: Optional[bool] = Field(default=None, description="""Whether this query must complete successfully before the decision proceeds. Defaults true.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookQueryStep']} })
+
+
+class PlaybookDecision(ConfiguredBaseModel):
+    """
+    The decision shape of a Playbook: the advisory criteria relevant to the choice and the resolution flows available. The agent picks; the playbook declares the choice space, never the preference.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:PlaybookDecision',
+         'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
+
+    criteria_refs: list[str] = Field(default=..., description="""Names of advisory axioms (severity: advisory) the agent should weigh as viability inputs. The orchestrator evaluates each against the assembled context before surfacing the decision; the agent reads typed evaluation results, not just names.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookDecision']} })
+    selects_one_of: list[str] = Field(default=..., description="""Resolution flow names. The agent picks exactly one. Order in this list does NOT imply priority — the renderer presents the list neutralized and the primer reinforces the rule.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookDecision']} })
+
+
+class PlaybookAlwaysFires(ConfiguredBaseModel):
+    """
+    A structural post-resolution effect of a Playbook — an event or flow that fires on every successful completion regardless of which resolution path the agent chose. Exactly one of `event` / `flow` is set.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:PlaybookAlwaysFires',
+         'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
+
+    event: Optional[str] = Field(default=None, description="""Event name. Mutually exclusive with `flow`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookAlwaysFires']} })
+    flow: Optional[str] = Field(default=None, description="""Flow name. Mutually exclusive with `event`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookQueryStep', 'PlaybookAlwaysFires']} })
+
+
+class PlaybookBody(ConfiguredBaseModel):
+    """
+    Shape of the `scont:playbook` annotation on a class instantiating `scont:Playbook`. A Playbook is a named multi-flow choreography anchored to a (role, trigger_event) pair. It scaffolds how an agent assembles context and identifies the choice space for a class of situation. It declares world content — which queries to run, which criteria are relevant, which resolution paths are available — and never declares policy (which to prefer, in what order, what defaults). See agent_system_design.md §6.1 and §2.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:PlaybookBody',
+         'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
+
+    role: str = Field(default=..., description="""Role whose agent runs this playbook when the trigger fires.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    triggered_by: str = Field(default=..., description="""Event class that triggers this playbook at the anchored role.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    input_quantum: str = Field(default=..., description="""Quantum class that arrives with the trigger event.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    context_assembly: Optional[list[PlaybookQueryStep]] = Field(default=None, description="""Query-flow steps the playbook fans out to gather context before the decision. Order in the YAML is authoring convenience and does NOT imply priority or sequence — the orchestrator composes responses per `synchronization`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    synchronization: Optional[PlaybookSynchronization] = Field(default=None, description="""Wait semantics for context_assembly. wait_all means the decision sees every typed response; wait_any is legitimate only for interchangeable evidence (rare).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    decision: Optional[PlaybookDecision] = Field(default=None, description="""The decision shape: advisory criteria relevant to the choice and the resolution flows available. The agent picks; the playbook declares the choice space.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    always_fires: Optional[list[PlaybookAlwaysFires]] = Field(default=None, description="""Events and/or flows that fire on every successful playbook completion, regardless of resolution path. Structural post-resolution effects.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+
+
+class ToolBody(ConfiguredBaseModel):
+    """
+    Shape of the `scont:tool` annotation on a class instantiating `scont:Tool`. A Tool is a declared deterministic service the orchestrator can wire and an agent can invoke via `call_tool`.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:ToolBody',
+         'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
+
+    description: str = Field(default=..., description="""One-line human description of what the tool does.""", json_schema_extra = { "linkml_meta": {'domain_of': ['RoleBody', 'EventBody', 'ToolBody']} })
+    category: ToolCategory = Field(default=..., description="""reader (reads world state) or compute (pure function).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ToolBody']} })
+    input_class: str = Field(default=..., description="""Quantum/entity class for the input. Validated by the orchestrator before invocation. Must resolve to a declared class.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ToolBody']} })
+    output_class: str = Field(default=..., description="""Quantum/entity class for the output. Validated by the orchestrator before returning to the agent. Must resolve to a declared class.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ToolBody']} })
+    implementation: str = Field(default=..., description="""Symbolic identifier the orchestrator resolves to a Python callable at boot. Not a path, not a code reference — a contract name, the same shape as `tool_ref` on axioms. Does not resolve to anything in the ontology.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ToolBody']} })
+    deterministic: Optional[bool] = Field(default=None, description="""Always true for now; declared for forward compatibility.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ToolBody']} })
+    available_to: list[str] = Field(default=..., description="""Role names that may invoke this tool via `call_tool`. The role-view renderer filters Tools by membership in this list. Each must resolve to a declared Role.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ToolBody']} })
+
+
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
 RoleBody.model_rebuild()
@@ -308,3 +402,8 @@ AxiomBody.model_rebuild()
 TransitionBody.model_rebuild()
 StateMachineBody.model_rebuild()
 MetricBody.model_rebuild()
+PlaybookQueryStep.model_rebuild()
+PlaybookDecision.model_rebuild()
+PlaybookAlwaysFires.model_rebuild()
+PlaybookBody.model_rebuild()
+ToolBody.model_rebuild()

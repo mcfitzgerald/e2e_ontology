@@ -124,6 +124,30 @@ enums:
       dbt:
         description: "Delegated to the dbt semantic layer (future)."
 
+  PlaybookSynchronization:
+    description: >-
+      Wait semantics for a Playbook's context_assembly fan-out. Declares how
+      the orchestrator composes the typed query responses before surfacing the
+      decision. World content (composition mechanics), not policy.
+    permissible_values:
+      wait_all:
+        description: "Decision proceeds only when every required query has responded."
+      wait_any:
+        description: >-
+          Decision can proceed on the first response. Legitimate only when the
+          responses are interchangeable evidence; rare and needs justification.
+
+  ToolCategory:
+    description: >-
+      Category of a declared Tool. Both categories are deterministic and free
+      of side effects; the distinction tells the agent whether the tool reads
+      world state or computes a pure function.
+    permissible_values:
+      reader:
+        description: "Reads world state; no side effects. Safe to call freely."
+      compute:
+        description: "Pure function over typed input; no side effects."
+
 # ============================================================================
 # BODY SHAPES — one class per scont annotation
 # ============================================================================
@@ -290,6 +314,16 @@ classes:
           comparisons. Evaluates to None on missing values. When absent, the
           axiom is evaluated by the LLM reading `nl`.
         required: false
+      tool_ref:
+        description: >-
+          Name of a deterministic compute tool that evaluates this axiom. When
+          present, the orchestrator binds the name to a Python callable at boot;
+          the axiom evaluator dispatches to it rather than parsing `expr`. Use
+          for axioms requiring world-state access (schedules, lead times,
+          calendars) that exceed `equals_expression` syntax. `tool_ref` wins
+          over `expr` when both are present; `nl` remains authoritative for
+          human/LLM reading.
+        required: false
       nl:
         description: >-
           Natural-language statement of the axiom. Always required. Survives
@@ -424,3 +458,179 @@ classes:
           Optional hint that this local metric is a candidate for future
           promotion to the dbt semantic layer. Informational.
         required: false
+
+  # --------------------------------------------------------------------------
+  # Playbook — a named multi-flow choreography anchored to a (role, event) pair.
+  # Scaffolds HOW an agent assembles context and identifies the choice space.
+  # Declares world content (queries that exist, criteria that are relevant,
+  # paths that are available); NEVER declares policy (which to prefer, in what
+  # order, what defaults). See agent_system_design.md §6.1 and §2.
+  #
+  # Like FlowBody, the Playbook's `llm_prompt_hint` is carried as a SIBLING
+  # `scont:llm_prompt_hint` annotation, not as a body field — so it is absent
+  # here by design (extra="forbid" would otherwise reject the sibling form).
+  # --------------------------------------------------------------------------
+
+  PlaybookQueryStep:
+    class_uri: scont:PlaybookQueryStep
+    description: >-
+      One context-assembly step in a Playbook: a query flow the anchored role
+      fans out to gather typed context before the decision.
+    attributes:
+      flow:
+        description: >-
+          Query flow name. Must resolve to a declared flow with `returns:` set
+          (i.e. a request-response query flow).
+        required: true
+      required:
+        description: >-
+          Whether this query must complete successfully before the decision
+          proceeds. Defaults true.
+        range: boolean
+        required: false
+
+  PlaybookDecision:
+    class_uri: scont:PlaybookDecision
+    description: >-
+      The decision shape of a Playbook: the advisory criteria relevant to the
+      choice and the resolution flows available. The agent picks; the playbook
+      declares the choice space, never the preference.
+    attributes:
+      criteria_refs:
+        description: >-
+          Names of advisory axioms (severity: advisory) the agent should weigh
+          as viability inputs. The orchestrator evaluates each against the
+          assembled context before surfacing the decision; the agent reads
+          typed evaluation results, not just names.
+        multivalued: true
+        range: string
+        required: true
+      selects_one_of:
+        description: >-
+          Resolution flow names. The agent picks exactly one. Order in this
+          list does NOT imply priority — the renderer presents the list
+          neutralized and the primer reinforces the rule.
+        multivalued: true
+        range: string
+        required: true
+
+  PlaybookAlwaysFires:
+    class_uri: scont:PlaybookAlwaysFires
+    description: >-
+      A structural post-resolution effect of a Playbook — an event or flow that
+      fires on every successful completion regardless of which resolution path
+      the agent chose. Exactly one of `event` / `flow` is set.
+    attributes:
+      event:
+        description: "Event name. Mutually exclusive with `flow`."
+        required: false
+      flow:
+        description: "Flow name. Mutually exclusive with `event`."
+        required: false
+
+  PlaybookBody:
+    class_uri: scont:PlaybookBody
+    description: >-
+      Shape of the `scont:playbook` annotation on a class instantiating
+      `scont:Playbook`. A Playbook is a named multi-flow choreography anchored
+      to a (role, trigger_event) pair. It scaffolds how an agent assembles
+      context and identifies the choice space for a class of situation. It
+      declares world content — which queries to run, which criteria are
+      relevant, which resolution paths are available — and never declares
+      policy (which to prefer, in what order, what defaults). See
+      agent_system_design.md §6.1 and §2.
+    attributes:
+      role:
+        description: "Role whose agent runs this playbook when the trigger fires."
+        required: true
+      triggered_by:
+        description: "Event class that triggers this playbook at the anchored role."
+        required: true
+      input_quantum:
+        description: "Quantum class that arrives with the trigger event."
+        required: true
+      context_assembly:
+        description: >-
+          Query-flow steps the playbook fans out to gather context before the
+          decision. Order in the YAML is authoring convenience and does NOT
+          imply priority or sequence — the orchestrator composes responses per
+          `synchronization`.
+        multivalued: true
+        inlined_as_list: true
+        range: PlaybookQueryStep
+        required: false
+      synchronization:
+        description: >-
+          Wait semantics for context_assembly. wait_all means the decision sees
+          every typed response; wait_any is legitimate only for interchangeable
+          evidence (rare).
+        range: PlaybookSynchronization
+        required: false
+      decision:
+        description: >-
+          The decision shape: advisory criteria relevant to the choice and the
+          resolution flows available. The agent picks; the playbook declares
+          the choice space.
+        range: PlaybookDecision
+        inlined: true
+        required: false
+      always_fires:
+        description: >-
+          Events and/or flows that fire on every successful playbook completion,
+          regardless of resolution path. Structural post-resolution effects.
+        multivalued: true
+        inlined_as_list: true
+        range: PlaybookAlwaysFires
+        required: false
+
+  # --------------------------------------------------------------------------
+  # Tool — a declared deterministic service the orchestrator can wire and an
+  # agent can invoke via `call_tool`. Two categories: reader (reads world
+  # state, no side effects) and compute (pure function over typed input). See
+  # agent_system_design.md §6.2. `llm_prompt_hint` is a sibling annotation, as
+  # with flows and playbooks.
+  # --------------------------------------------------------------------------
+
+  ToolBody:
+    class_uri: scont:ToolBody
+    description: >-
+      Shape of the `scont:tool` annotation on a class instantiating
+      `scont:Tool`. A Tool is a declared deterministic service the orchestrator
+      can wire and an agent can invoke via `call_tool`.
+    attributes:
+      description:
+        description: "One-line human description of what the tool does."
+        required: true
+      category:
+        description: "reader (reads world state) or compute (pure function)."
+        range: ToolCategory
+        required: true
+      input_class:
+        description: >-
+          Quantum/entity class for the input. Validated by the orchestrator
+          before invocation. Must resolve to a declared class.
+        required: true
+      output_class:
+        description: >-
+          Quantum/entity class for the output. Validated by the orchestrator
+          before returning to the agent. Must resolve to a declared class.
+        required: true
+      implementation:
+        description: >-
+          Symbolic identifier the orchestrator resolves to a Python callable at
+          boot. Not a path, not a code reference — a contract name, the same
+          shape as `tool_ref` on axioms. Does not resolve to anything in the
+          ontology.
+        required: true
+      deterministic:
+        description: "Always true for now; declared for forward compatibility."
+        range: boolean
+        required: false
+      available_to:
+        description: >-
+          Role names that may invoke this tool via `call_tool`. The role-view
+          renderer filters Tools by membership in this list. Each must resolve
+          to a declared Role.
+        multivalued: true
+        range: string
+        required: true

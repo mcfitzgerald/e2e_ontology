@@ -121,6 +121,70 @@ class FSMSummary(_Base):
     governs_flows: tuple[str, ...]
 
 
+class PlaybookQueryStepView(_Base):
+    """One context-assembly query step: the query flow and the class it returns.
+    `required` reflects whether the decision waits on it. Order in the rendered
+    list is alphabetical (neutralized) — it is NOT a sequence or a priority."""
+    flow: str
+    returns: Optional[str] = None
+    required: bool = True
+
+
+class PlaybookCriterionView(_Base):
+    """An advisory criterion the agent weighs at decision time. `nl` is the
+    authoritative definition of what the criterion means; the orchestrator
+    evaluates it against the assembled context and the agent reads the result."""
+    name: str
+    nl: str
+
+
+class PlaybookResolutionView(_Base):
+    """A resolution path the agent may pick. `target_role` is where the chosen
+    flow hands off. **Order in the rendered list is arbitrary** (alphabetized) —
+    a reader who treats the first entry as preferred has reintroduced policy."""
+    flow: str
+    target_role: str
+
+
+class PlaybookEffectView(_Base):
+    """A structural post-resolution effect — an event or flow that fires on
+    every successful completion regardless of which path was chosen."""
+    kind: str   # "event" | "flow"
+    name: str
+
+
+class PlaybookSummary(_Base):
+    """A Playbook anchored to this role: the Mode 2 scaffold for one class of
+    situation. Declares the queries to fan out, the advisory criteria relevant
+    to the choice, and the resolution paths available — never which to prefer
+    (§2). `context_assembly`, `criteria`, `selects_one_of`, and `always_fires`
+    are sorted by name so no ordering implies priority."""
+    name: str
+    triggered_by: str
+    input_quantum: str
+    synchronization: str    # "wait_all" | "wait_any"
+    context_assembly: tuple[PlaybookQueryStepView, ...]
+    criteria: tuple[PlaybookCriterionView, ...]
+    selects_one_of: tuple[PlaybookResolutionView, ...]
+    always_fires: tuple[PlaybookEffectView, ...]
+    llm_prompt_hint: Optional[str] = None
+
+
+class ToolSummary(_Base):
+    """A declared deterministic Tool this role may invoke via `call_tool`.
+    `category` is reader (reads world state) or compute (pure function). The
+    input/output slot schemas let the agent shape the call without guessing."""
+    name: str
+    category: str           # "reader" | "compute"
+    description: str
+    input_class: str
+    output_class: str
+    implementation: str
+    input_schema: Optional[QuantumSchema] = None
+    output_schema: Optional[QuantumSchema] = None
+    llm_prompt_hint: Optional[str] = None
+
+
 class RoleIdentity(_Base):
     name: str
     domain: Optional[str]
@@ -147,10 +211,11 @@ class RoleView(BaseModel):
     events_emitted: tuple[EventSummary, ...]    # events the role produces (observed_by == role)
     fsms_governing_my_quanta: tuple[FSMSummary, ...]
 
-    # Phase 5 stubs — Playbook + Tool meta-constructs are not yet in scont_meta.yaml.
-    # Rendered as empty sections so the prompt shape is stable across the upgrade.
-    playbooks_anchored_to: tuple[Any, ...] = ()
-    tools_available_to: tuple[Any, ...] = ()
+    # Playbook + Tool meta-constructs (Phase 1.8). `playbooks_anchored_to` are
+    # the Mode 2 scaffolds whose `role` is this role; `tools_available_to` are
+    # the Tools listing this role in `available_to`.
+    playbooks_anchored_to: tuple[PlaybookSummary, ...] = ()
+    tools_available_to: tuple[ToolSummary, ...] = ()
     advisory_criteria: tuple[AxiomSummary, ...] = ()
 
     # ---- format adapters ---------------------------------------------------
@@ -326,8 +391,9 @@ def _render_tool_kit(view: RoleView) -> list[str]:
         "Orchestrator checks the guard and may route via `on_failure_route_to`."
     )
     out.append(
-        "- call_tool(name, input): invoke a declared specialist tool. "
-        "(No tools are declared yet — the Tool meta-construct lands in Phase 5.)"
+        f"- call_tool(name, input): invoke a declared tool available to you "
+        f"({_join_names(view.tools_available_to) or '—'}). Reader tools read world "
+        "state — prefer them over inventing facts. See TOOLS AVAILABLE TO ME below."
     )
     hi = view.identity.human_involvement
     if hi == "autonomous":
@@ -351,6 +417,71 @@ def _render_tool_kit(view: RoleView) -> list[str]:
 
 def _join_names(items: tuple[Any, ...]) -> str:
     return ", ".join(getattr(i, "name", str(i)) for i in items)
+
+
+def _fmt_compact_slots(qs: Optional[QuantumSchema]) -> str:
+    """One-line slot list for a tool's input/output, e.g.
+    `sku: SKU` or `lines: ProductionLine[]`. Multivalued slots get a `[]`."""
+    if qs is None or not qs.slots:
+        return ""
+    return ", ".join(s.name + ": " + s.range + ("[]" if s.multivalued else "") for s in qs.slots)
+
+
+def _render_section_playbooks(view: RoleView) -> list[str]:
+    """Playbooks anchored to this role. The lists inside (context_assembly,
+    criteria, resolution paths, effects) are alphabetized upstream — the render
+    states 'order arbitrary' on the resolution paths so no reader mistakes
+    list position for priority (§2)."""
+    out = ["## Playbooks anchored to me", ""]
+    if not view.playbooks_anchored_to:
+        out.append("(none — no playbook is anchored to this role)")
+        out.append("")
+        return out
+    for pb in view.playbooks_anchored_to:
+        out.append(f"- {pb.name}")
+        out.append(f"    triggered_by: {pb.triggered_by}")
+        out.append(f"    input_quantum: {pb.input_quantum}")
+        if pb.context_assembly:
+            out.append(f"    context_assembly (parallel, {pb.synchronization}):")
+            for step in pb.context_assembly:
+                ret = f"  (returns {step.returns})" if step.returns else ""
+                opt = "" if step.required else "  [optional]"
+                out.append(f"      - {step.flow}{ret}{opt}")
+        if pb.criteria:
+            out.append("    advisory criteria (evaluated against assembled context at decision time):")
+            for c in pb.criteria:
+                out.append(f"      - {c.name}: {c.nl}")
+        if pb.selects_one_of:
+            out.append("    resolution paths (pick one; order arbitrary):")
+            for r in pb.selects_one_of:
+                out.append(f"      - {r.flow}  (to {r.target_role})")
+        if pb.always_fires:
+            out.append("    always fires on completion:")
+            for e in pb.always_fires:
+                out.append(f"      - {e.kind}: {e.name}")
+        if pb.llm_prompt_hint:
+            out.append(f"    hint: {pb.llm_prompt_hint.strip()}")
+    out.append("")
+    return out
+
+
+def _render_section_tools(view: RoleView) -> list[str]:
+    """Tools this role may invoke via `call_tool`, filtered by `available_to`."""
+    out = ["## Tools available to me", ""]
+    if not view.tools_available_to:
+        out.append("(none — no tool lists this role in available_to)")
+        out.append("")
+        return out
+    for t in view.tools_available_to:
+        out.append(f"({t.category}) {t.name}: {t.description}")
+        in_slots = _fmt_compact_slots(t.input_schema)
+        out_slots = _fmt_compact_slots(t.output_schema)
+        out.append(f"    input:  {t.input_class}" + (f" ({in_slots})" if in_slots else ""))
+        out.append(f"    output: {t.output_class}" + (f" ({out_slots})" if out_slots else ""))
+        if t.llm_prompt_hint:
+            out.append(f"    hint: {t.llm_prompt_hint.strip()}")
+    out.append("")
+    return out
 
 
 def _render_identity(view: RoleView, *, header: str = "# Role") -> list[str]:
@@ -406,15 +537,8 @@ def _render_markdown(view: RoleView) -> str:
     ))
     out.extend(_render_section_fsms(view.fsms_governing_my_quanta))
     out.extend(_render_tool_kit(view))
-    # Phase 5 stubs.
-    out.append("## Playbooks anchored to me")
-    out.append("")
-    out.append("(none — Playbook meta-construct lands in Phase 5.)")
-    out.append("")
-    out.append("## Specialist tools I can call")
-    out.append("")
-    out.append("(none — Tool meta-construct lands in Phase 5.)")
-    out.append("")
+    out.extend(_render_section_playbooks(view))
+    out.extend(_render_section_tools(view))
     out.append("## Advisory criteria (named viability inputs)")
     out.append("")
     if view.advisory_criteria:
