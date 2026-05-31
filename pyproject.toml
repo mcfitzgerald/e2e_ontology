@@ -1,0 +1,34 @@
+[project]
+name = "e2e-ontology"
+version = "0.1.0"
+description = "LinkML supply chain ontology + Ontology Service (role-view renderer + instance validator). The world model + action vocabulary the e2e_orchestrator runtime consumes."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "linkml-runtime>=1.7",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "linkml>=1.7",  # gen-pydantic, used by `exploder regen-bodies`
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# Flat layout: two top-level modules + the ontology_service package. The
+# authored YAML data files (supply_chain_demo.yaml, world_state.yaml,
+# scont_meta.yaml, core.yaml) are NOT packaged — they are resolved by
+# consumers via `ontology_service.paths`, which is __file__-relative and so
+# holds under an editable install or git-source checkout (the supported
+# consumption model). See ontology_service/paths.py.
+[tool.setuptools]
+py-modules = ["exploder", "scont_bodies"]
+packages = ["ontology_service"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

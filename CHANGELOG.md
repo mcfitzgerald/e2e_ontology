@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-05-31 — Packaging: make `e2e-ontology` pip-installable
+
+- **Added `pyproject.toml`** (setuptools flat layout: `py-modules = [exploder, scont_bodies]`, `packages = [ontology_service]`; runtime deps linkml-runtime / pydantic / pyyaml). The repo is now a real installable package, which lets the `e2e_orchestrator` runtime depend on it directly instead of surfacing it on `sys.path`.
+- **Added `ontology_service/paths.py`** exposing the authored data-file locations (`SUPPLY_CHAIN_DEMO_YAML`, `WORLD_STATE_YAML`, `SCONT_META_YAML`), resolved `__file__`-relative so consumers locate the YAML without a hard-coded repo path. The YAML files are intentionally **not** packaged as wheel data — the ontology is consumed from an editable / git-source checkout, where `__file__`-relative resolution holds. Exported from `ontology_service`.
+- **No behaviour change.** 249 tests unchanged and green.
+
 ### 2026-05-30 — Phase 1.8: Playbook + Tool meta-constructs + the Scene 5 Playbook
 
 - **Context.** Largest upstream contract change since Phase 1. Orchestrator Phases 2/3/4 landed; Phase 3 surfaced the **hallucinated-grounding** pattern (supply_planning invented plant/line names) which Phase 4's deterministic floor *catches* (axiom rejects with `unknown_entity`) but doesn't *prevent*. Phase 5 prevents it by giving agents **reader tools** to query world state, and scaffolds the Scene 5 cross-domain decision with a **Playbook** — both of which require new upstream meta-constructs.
