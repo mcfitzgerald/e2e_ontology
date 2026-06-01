@@ -529,7 +529,7 @@ Wrapping the Ontology Service as an MCP server collapses what would otherwise be
 
 Concretely, with MCP in place:
 
-- A knowledge worker asks Claude "if Walmart's promo slips a week, who's affected?" — Claude traverses via MCP, returns a typed cited answer.
+- A knowledge worker asks Claude "if Megalomart's promo slips a week, who's affected?" — Claude traverses via MCP, returns a typed cited answer.
 - An IDE plugin offers "go to ontology" — same protocol.
 - A new hire onboarding asks "walk me through what supply_planning does day-to-day" — Claude renders the role's connected graph as prose.
 

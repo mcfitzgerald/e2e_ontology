@@ -23,10 +23,10 @@
 #   NJ-L1 rated_weekly_capacity = 5000
 #   Baseline during promo window (week_start_day=140):
 #     TP-FLAG-6OZ:  1500   (existing)
-#     TP-SEC-6OZ:   2000   (Target commitment)
+#     TP-SEC-6OZ:   2000   (Bullseye commitment)
 #                  -----
 #                   3500   (70% load — fine baseline)
-#   With Walmart promo on TP-FLAG-6OZ at 3x uplift:
+#   With Megalomart promo on TP-FLAG-6OZ at 3x uplift:
 #     TP-FLAG-6OZ:  4500   (1500 × 3)
 #     TP-SEC-6OZ:   2000
 #                  -----
@@ -159,27 +159,27 @@ suppliers:
 # ----------------------------------------------------------------------------
 # Retailer Commitments — 8 standing replenishment commitments
 # ----------------------------------------------------------------------------
-# Key narrative commitment: COM-TGT-SEC-Q2 (Target on TP-SEC-6OZ, MABD 130).
-# This is the at-risk commitment when the Walmart promo on TP-FLAG-6OZ jams
+# Key narrative commitment: COM-BUL-SEC-Q2 (Bullseye on TP-SEC-6OZ, MABD 130).
+# This is the at-risk commitment when the Megalomart promo on TP-FLAG-6OZ jams
 # NJ-L1. OTIF penalty = 3% × shipment value.
 
 retailer_commitments:
-  - commitment_id: COM-WMT-FLAG-Q2
-    retailer: WALMART
+  - commitment_id: COM-MGM-FLAG-Q2
+    retailer: MEGALOMART
     sku: TP-FLAG-6OZ
     committed_volume: 12000
     mabd_day: 135
     otif_penalty_rate: 0.03
 
-  - commitment_id: COM-TGT-SEC-Q2
-    retailer: TARGET
+  - commitment_id: COM-BUL-SEC-Q2
+    retailer: BULLSEYE
     sku: TP-SEC-6OZ
     committed_volume: 8000
     mabd_day: 130
     otif_penalty_rate: 0.03
 
-  - commitment_id: COM-TGT-FLAG-Q2
-    retailer: TARGET
+  - commitment_id: COM-BUL-FLAG-Q2
+    retailer: BULLSEYE
     sku: TP-FLAG-6OZ
     committed_volume: 5000
     mabd_day: 138
@@ -192,15 +192,15 @@ retailer_commitments:
     mabd_day: 140
     otif_penalty_rate: 0.025
 
-  - commitment_id: COM-WMT-MW-Q2
-    retailer: WALMART
+  - commitment_id: COM-MGM-MW-Q2
+    retailer: MEGALOMART
     sku: MW-CLAS-500ML
     committed_volume: 6000
     mabd_day: 145
     otif_penalty_rate: 0.03
 
-  - commitment_id: COM-TGT-WHIT-Q2
-    retailer: TARGET
+  - commitment_id: COM-BUL-WHIT-Q2
+    retailer: BULLSEYE
     sku: TPB-WHIT-4OZ
     committed_volume: 3000
     mabd_day: 145
@@ -213,8 +213,8 @@ retailer_commitments:
     mabd_day: 132
     otif_penalty_rate: 0.025
 
-  - commitment_id: COM-WMT-KIDS-Q2
-    retailer: WALMART
+  - commitment_id: COM-MGM-KIDS-Q2
+    retailer: MEGALOMART
     sku: TP-KIDS-3OZ
     committed_volume: 4500
     mabd_day: 142
@@ -223,26 +223,26 @@ retailer_commitments:
 # ----------------------------------------------------------------------------
 # Trade Promotions — 2 in-flight
 # ----------------------------------------------------------------------------
-# PROMO-WMT-FLAG-2026Q2 is the demo's seed signal: aligned but not yet
+# PROMO-MGM-FLAG-2026Q2 is the demo's seed signal: aligned but not yet
 # committed (renegotiation viable per the viable_promo_renegotiation
 # criterion), 3x uplift on TP-FLAG-6OZ for two weeks starting day 142.
 #
-# PROMO-TGT-WHIT-2026Q2 is background: committed (renegotiation expensive),
+# PROMO-BUL-WHIT-2026Q2 is background: committed (renegotiation expensive),
 # 2x uplift on a different SKU (TPB-WHIT-4OZ — runs on CA-L1, not the
 # conflict line), so it does not interact with the demo's central conflict.
 
 trade_promotions:
-  - promo_id: PROMO-WMT-FLAG-2026Q2
+  - promo_id: PROMO-MGM-FLAG-2026Q2
     sku: TP-FLAG-6OZ
-    retailer: WALMART
+    retailer: MEGALOMART
     volume_uplift_factor: 3.0
     promo_start_day: 142
     promo_end_day: 156
     commitment_status: aligned
 
-  - promo_id: PROMO-TGT-WHIT-2026Q2
+  - promo_id: PROMO-BUL-WHIT-2026Q2
     sku: TPB-WHIT-4OZ
-    retailer: TARGET
+    retailer: BULLSEYE
     volume_uplift_factor: 2.0
     promo_start_day: 165
     promo_end_day: 179

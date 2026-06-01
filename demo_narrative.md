@@ -36,8 +36,8 @@ Customer development is outside the supply chain. The ontology declares it as a 
 - **Company:** CPG manufacturer of oral care products (toothpaste, mouthwash).
 - **Product A:** A flagship toothpaste SKU (think "Colgate Total 6oz").
 - **Product B:** A secondary toothpaste SKU on a shared production line.
-- **Retailer 1:** Walmart (promo target, tier-1 with OTIF penalties).
-- **Retailer 2:** Target (standing replenishment commitment for Product B, OTIF penalties).
+- **Retailer 1:** Megalomart (promo target, tier-1 with OTIF penalties).
+- **Retailer 2:** Bullseye (standing replenishment commitment for Product B, OTIF penalties).
 - **Time horizon:** ~8 weeks out.
 
 Product A and Product B share a manufacturing line at the same plant. The line runs at a known weekly capacity. Both SKUs have standing replenishment commitments to retailers with OTIF (On-Time In-Full) penalty windows.
@@ -48,7 +48,7 @@ Product A and Product B share a manufacturing line at the same plant. The line r
 
 ### Scene 1 — The promo signal enters (S&OP boundary)
 
-Customer development has committed to a BOGO promotion on Product A at Walmart, starting in 6 weeks. The expected volume lift is 3x baseline for the 2-week promo window. This promo plan has been aligned through S&OP. A `promo_plan_aligned` event fires, carrying a `TradePromotion` quantum into the supply chain.
+Customer development has committed to a BOGO promotion on Product A at Megalomart, starting in 6 weeks. The expected volume lift is 3x baseline for the 2-week promo window. This promo plan has been aligned through S&OP. A `promo_plan_aligned` event fires, carrying a `TradePromotion` quantum into the supply chain.
 
 **What the ontology provides:** The `submit_promo_plan` flow carries the aligned promo commitment from the `customer_development` boundary role to `demand_planning`. The promo is not a vague signal — it's a structured, typed quantum (SKU, retailer, volume uplift, window, commitment status) that the demand planning agent can consume directly. The boundary role pattern declares "this signal comes from outside SC — here's its shape and who receives it."
 
@@ -71,7 +71,7 @@ The supply planning agent receives the supply request. This is the network brain
 - Which plant(s) can produce Product A?
 - Is there enough line capacity at the assigned plant for the promo window?
 - Are raw materials available on the required timeline?
-- Which DCs need to be staged for Walmart delivery?
+- Which DCs need to be staged for Megalomart delivery?
 
 Supply planning assigns the production to a specific plant and emits two downstream requests:
 
@@ -87,7 +87,7 @@ Supply planning assigns the production to a specific plant and emits two downstr
 The production planning agent receives the production request. It checks the line schedule for weeks 6-7 and discovers:
 
 - Product A promo volume requires 80% of line capacity for 2 weeks.
-- Product B is currently scheduled for 40% of that same line during the same window (standing replenishment for Target).
+- Product B is currently scheduled for 40% of that same line during the same window (standing replenishment for Bullseye).
 - **Total demand: 120% of capacity.** Something has to give.
 
 An axiom fires: **`line_capacity_not_exceeded`** (blocking). The total scheduled production on the line exceeds rated capacity. This is a hard gate — you cannot produce 120% on a line.
@@ -107,10 +107,10 @@ The `supply_planning` role carries a `human_involvement: conditional` annotation
 The supply planning agent reads the ontology to discover what context it needs and queries each affected domain:
 
 **1. Query logistics for OTIF exposure.**
-Via `check_otif_exposure` flow (supply_planning → logistics_planning): "if Product B ships N days late to Target, what's the financial exposure?" Logistics calculates: Target's MABD is day X, delay pushes shipment to day X+3, OTIF penalty = 3% of COGS on affected shipments = $Y.
+Via `check_otif_exposure` flow (supply_planning → logistics_planning): "if Product B ships N days late to Bullseye, what's the financial exposure?" Logistics calculates: Bullseye's MABD is day X, delay pushes shipment to day X+3, OTIF penalty = 3% of COGS on affected shipments = $Y.
 
 **2. Query commercial for promo flexibility.**
-Via `check_promo_flexibility` flow (supply_planning → customer_development): "is the Walmart promo timing negotiable?" The `TradePromotion` quantum's `commitment_status` field answers this — if `contractually_locked`, renegotiation is off the table.
+Via `check_promo_flexibility` flow (supply_planning → customer_development): "is the Megalomart promo timing negotiable?" The `TradePromotion` quantum's `commitment_status` field answers this — if `contractually_locked`, renegotiation is off the table.
 
 **3. Check co-manufacturer availability.**
 Via `check_coman_availability` flow (supply_planning → co_manufacturing boundary): "is a qualified co-man available for Product B volume in weeks 6-7?" The co-man entity carries qualification status, capacity, and premium cost.
@@ -145,7 +145,7 @@ Either way, the execution path is the same — declared flows in the ontology:
 
 - `shift_to_coman` flow executes: Product B's volume for weeks 6-7 routes to a qualified co-manufacturer.
 - Product A promo volume proceeds on the internal line — `request_production` re-evaluated, axiom now passes.
-- Product B's OTIF commitments to Target are preserved via the co-man route.
+- Product B's OTIF commitments to Bullseye are preserved via the co-man route.
 - `procurement` may need to adjust raw material sourcing (co-man may source independently or need materials shipped).
 - `logistics_planning` updates the fulfillment plan — Product A ships from internal plant DC, Product B ships from co-man DC.
 
@@ -153,7 +153,7 @@ The downstream flows execute, and the supply chain re-converges on the happy pat
 
 ### Executive punchline
 
-> "A promo commitment entered the supply chain and hit a capacity wall. Within minutes, agents across five functions — commercial, demand planning, supply network operations, manufacturing, and logistics — assembled the full cross-domain impact: OTIF exposure at Target, co-manufacturer availability, promo flexibility with Walmart. A human planner saw the complete picture with quantified trade-offs and made the call. No one built a dashboard for this scenario. No one wrote integration code between these systems. The ontology declared the domains, the constraints, and the information the decision-maker needs. The agents navigated it. That's what an autonomous supply chain looks like — not replacing human judgment, but making sure every decision has complete, cross-functional context in minutes instead of days."
+> "A promo commitment entered the supply chain and hit a capacity wall. Within minutes, agents across five functions — commercial, demand planning, supply network operations, manufacturing, and logistics — assembled the full cross-domain impact: OTIF exposure at Bullseye, co-manufacturer availability, promo flexibility with Megalomart. A human planner saw the complete picture with quantified trade-offs and made the call. No one built a dashboard for this scenario. No one wrote integration code between these systems. The ontology declared the domains, the constraints, and the information the decision-maker needs. The agents navigated it. That's what an autonomous supply chain looks like — not replacing human judgment, but making sure every decision has complete, cross-functional context in minutes instead of days."
 
 ---
 

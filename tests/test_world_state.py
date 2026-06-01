@@ -100,7 +100,7 @@ def test_three_retailers_present(fixture):
     """The fixture exercises three retailers across commitments + promos."""
     retailers = {c["retailer"] for c in fixture["retailer_commitments"]}
     retailers |= {p["retailer"] for p in fixture["trade_promotions"]}
-    assert retailers == {"WALMART", "TARGET", "KROGER"}
+    assert retailers == {"MEGALOMART", "BULLSEYE", "KROGER"}
 
 
 def test_sku_references_resolve(fixture):
@@ -135,7 +135,7 @@ def test_promo_commitment_status_is_valid_enum(fixture, schema_view):
 
 
 def test_capacity_conflict_math(fixture):
-    """The fixture's production schedule + the Walmart promo uplift creates
+    """The fixture's production schedule + the Megalomart promo uplift creates
     the canonical NJ-L1 capacity conflict (per demo_narrative.md Scene 4).
 
     Math:
@@ -155,12 +155,12 @@ def test_capacity_conflict_math(fixture):
     nj_l1 = next(l for l in fixture["production_lines"] if l["line_code"] == "NJ-L1")
     assert nj_l1["rated_weekly_capacity"] == 5000
 
-    walmart_promo = next(
+    megalomart_promo = next(
         p for p in fixture["trade_promotions"]
-        if p["promo_id"] == "PROMO-WMT-FLAG-2026Q2"
+        if p["promo_id"] == "PROMO-MGM-FLAG-2026Q2"
     )
-    assert walmart_promo["sku"] == "TP-FLAG-6OZ"
-    assert walmart_promo["volume_uplift_factor"] == 3.0
+    assert megalomart_promo["sku"] == "TP-FLAG-6OZ"
+    assert megalomart_promo["volume_uplift_factor"] == 3.0
 
     # Week 140 baseline load on NJ-L1
     week_140 = [
@@ -177,7 +177,7 @@ def test_capacity_conflict_math(fixture):
     with_promo = (
         baseline_total
         - flag_baseline
-        + flag_baseline * walmart_promo["volume_uplift_factor"]
+        + flag_baseline * megalomart_promo["volume_uplift_factor"]
     )
     assert with_promo == 6500
     assert with_promo > nj_l1["rated_weekly_capacity"]  # the conflict
@@ -187,29 +187,29 @@ def test_capacity_conflict_math(fixture):
 
 
 def test_target_at_risk_commitment_exists(fixture):
-    """The narrative's at-risk commitment (Target on TP-SEC-6OZ) is present
+    """The narrative's at-risk commitment (Bullseye on TP-SEC-6OZ) is present
     and its MABD falls within the conflict window."""
     com = next(
         c for c in fixture["retailer_commitments"]
-        if c["commitment_id"] == "COM-TGT-SEC-Q2"
+        if c["commitment_id"] == "COM-BUL-SEC-Q2"
     )
-    assert com["retailer"] == "TARGET"
+    assert com["retailer"] == "BULLSEYE"
     assert com["sku"] == "TP-SEC-6OZ"
     # MABD day 130, promo runs days 142-156 → commitment is upstream of promo
     # window; the conflict arises because production for it shares NJ-L1.
     assert com["mabd_day"] == 130
 
 
-def test_walmart_promo_is_renegotiable(fixture):
-    """The Walmart promo is `aligned`, not `committed` — making promo
+def test_megalomart_promo_is_renegotiable(fixture):
+    """The Megalomart promo is `aligned`, not `committed` — making promo
     renegotiation a viable resolution path per
     viable_promo_renegotiation (introduced as an advisory criterion in
     Phase 5)."""
-    walmart_promo = next(
+    megalomart_promo = next(
         p for p in fixture["trade_promotions"]
-        if p["promo_id"] == "PROMO-WMT-FLAG-2026Q2"
+        if p["promo_id"] == "PROMO-MGM-FLAG-2026Q2"
     )
-    assert walmart_promo["commitment_status"] == "aligned"
+    assert megalomart_promo["commitment_status"] == "aligned"
 
 
 def test_supplier_lead_times_span_meaningful_range(fixture):

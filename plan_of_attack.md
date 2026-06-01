@@ -231,7 +231,7 @@ Purpose: open the ontology to analysis agents and knowledge workers via every LL
 
 - Connect the server; ask exploratory questions; verify answers cite real ontology elements.
 
-**DoD:** A knowledge worker asks Claude "if Walmart's promo slips a week, who's affected?" — Claude traverses via MCP and gives a typed, cited answer that resolves to real ontology elements. The same answer is reproducible across LLM clients.
+**DoD:** A knowledge worker asks Claude "if Megalomart's promo slips a week, who's affected?" — Claude traverses via MCP and gives a typed, cited answer that resolves to real ontology elements. The same answer is reproducible across LLM clients.
 
 ---
 
