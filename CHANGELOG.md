@@ -6,10 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
-### 2026-06-01 — Scrub real retailer names (Walmart→Megalomart, Target→Bullseye)
+### 2026-06-01 — Scrub real retailer names (Walmart→Megalomart, Target→Bullseye, Kroger→Greenfield)
 
-- Replaced real retailer names with fictional ones across the ontology, world-state fixture, narrative/design docs, tests, and (regenerated) `docs/` + snapshots: `Walmart`→`Megalomart`, `Target`→`Bullseye`, plus ID abbreviations `WMT`→`MGM`, `TGT`→`BUL` (e.g. `COM-TGT-SEC-Q2`→`COM-BUL-SEC-Q2`).
-- **Surgical on `Target`**: the `to_state` slot description ("Target state name") and the six "Target role for …" `llm_prompt_hint`s in `supply_chain_demo.yaml` are *not* the retailer and were preserved — only the retailer-list description (`retailer` slot: "Megalomart, Bullseye, Kroger, …") changed. Snapshots regenerated from scrubbed source and `docs/` regenerated via `exploder doc`. 249 tests green.
+- Replaced real retailer names with fictional ones across the ontology, world-state fixture, narrative/design docs, tests, and (regenerated) `docs/` + snapshots: `Walmart`→`Megalomart`, `Target`→`Bullseye`, `Kroger`→`Greenfield`, plus ID abbreviations `WMT`→`MGM`, `TGT`→`BUL`, `KRG`→`GRN` (e.g. `COM-TGT-SEC-Q2`→`COM-BUL-SEC-Q2`, `COM-KRG-SEC-Q2`→`COM-GRN-SEC-Q2`).
+- **Surgical on `Target`**: the `to_state` slot description ("Target state name") and the six "Target role for …" `llm_prompt_hint`s in `supply_chain_demo.yaml` are *not* the retailer and were preserved — only the retailer-list description (`retailer` slot: "Megalomart, Bullseye, Greenfield, …") changed. Snapshots regenerated from scrubbed source and `docs/` regenerated via `exploder doc`. 249 tests green.
+- **Kept by decision:** the industry-grounding references to real CPG leaders (P&G, Colgate) in `demo_narrative.md` / `initial_design_draft.md` / a `world_state.yaml` comment. These name the *modeled vertical* as a point of reference ("the POC models how P&G/Colgate operate") — they are not fake customer data, and removing them would weaken the positioning. Do not scrub them.
+
+### 2026-05-31 — Packaging: make `e2e-ontology` pip-installable
 
 - **Added `pyproject.toml`** (setuptools flat layout: `py-modules = [exploder, scont_bodies]`, `packages = [ontology_service]`; runtime deps linkml-runtime / pydantic / pyyaml). The repo is now a real installable package, which lets the `e2e_orchestrator` runtime depend on it directly instead of surfacing it on `sys.path`.
 - **Added `ontology_service/paths.py`** exposing the authored data-file locations (`SUPPLY_CHAIN_DEMO_YAML`, `WORLD_STATE_YAML`, `SCONT_META_YAML`), resolved `__file__`-relative so consumers locate the YAML without a hard-coded repo path. The YAML files are intentionally **not** packaged as wheel data — the ontology is consumed from an editable / git-source checkout, where `__file__`-relative resolution holds. Exported from `ontology_service`.

@@ -100,7 +100,7 @@ def test_three_retailers_present(fixture):
     """The fixture exercises three retailers across commitments + promos."""
     retailers = {c["retailer"] for c in fixture["retailer_commitments"]}
     retailers |= {p["retailer"] for p in fixture["trade_promotions"]}
-    assert retailers == {"MEGALOMART", "BULLSEYE", "KROGER"}
+    assert retailers == {"MEGALOMART", "BULLSEYE", "GREENFIELD"}
 
 
 def test_sku_references_resolve(fixture):

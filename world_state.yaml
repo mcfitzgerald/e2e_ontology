@@ -185,8 +185,8 @@ retailer_commitments:
     mabd_day: 138
     otif_penalty_rate: 0.03
 
-  - commitment_id: COM-KRG-FLAG-Q2
-    retailer: KROGER
+  - commitment_id: COM-GRN-FLAG-Q2
+    retailer: GREENFIELD
     sku: TP-FLAG-6OZ
     committed_volume: 4000
     mabd_day: 140
@@ -206,8 +206,8 @@ retailer_commitments:
     mabd_day: 145
     otif_penalty_rate: 0.03
 
-  - commitment_id: COM-KRG-SEC-Q2
-    retailer: KROGER
+  - commitment_id: COM-GRN-SEC-Q2
+    retailer: GREENFIELD
     sku: TP-SEC-6OZ
     committed_volume: 2500
     mabd_day: 132

@@ -228,7 +228,7 @@ classes:
         range: SKU
         required: true
       retailer:
-        description: "Retailer name (Megalomart, Bullseye, Kroger, ...)"
+        description: "Retailer name (Megalomart, Bullseye, Greenfield, ...)"
         range: string
         required: true
       volume_uplift_factor:

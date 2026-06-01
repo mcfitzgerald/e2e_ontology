@@ -61,7 +61,7 @@ This role owns demand-side signals. On a demand_anomaly_detected event (or an al
     quantum TradePromotion slots:
       promo_id: string (required) — Unique promotion identifier.
       sku: SKU (required) — SKU the promo applies to. Pass the entity id as a string.
-      retailer: string (required) — Retailer name (Megalomart, Bullseye, Kroger, ...).
+      retailer: string (required) — Retailer name (Megalomart, Bullseye, Greenfield, ...).
       volume_uplift_factor: decimal (required) — Multiplier on baseline demand during the promo window (e.g. 3.0 for 3x).
       promo_start_day: integer (required) — Day (1-365) the promotion starts.
       promo_end_day: integer (required) — Day (1-365) the promotion ends.
