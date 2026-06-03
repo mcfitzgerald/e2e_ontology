@@ -279,9 +279,15 @@ PLAYBOOKS ANCHORED TO ME
 - resolve_capacity_conflict
     triggered_by: capacity_conflict_detected
     input_quantum: CapacityConflict
-    context_assembly (parallel, wait_all):
+    context_assembly (parallel, wait_all) — complete set; once assembled, decide (do not gather more):
       - check_coman_availability  (returns ComanAvailability)
+          input sku <- CapacityConflict.competing_skus
+          input volume <- CapacityConflict.shortfall_units
+          input window_start_day <- CapacityConflict.window_start_day
+          input window_end_day <- CapacityConflict.window_end_day
       - check_otif_exposure  (returns OTIFExposure)
+          input sku <- CapacityConflict.at_risk_commitments.sku
+          input retailer <- CapacityConflict.at_risk_commitments.retailer
       - check_promo_flexibility  (returns PromoFlexibility)
     advisory criteria (evaluated against assembled context at decision time):
       - tolerable_otif_penalty: OTIF penalty exposure is a quantified input to the capacity-conflict trade-off, not a gate. This criterion surfaces the calculated penalty (OTIFExposure.calculated_penalty) and the affected shipment value so the agent can weigh accepting the delay against the cost of the alternative resolution paths. The ontology declares no threshold above which a penalty becomes intolerable — that judgment, and the line above which a human is engaged, belong to the agent and the orchestrator's policy, not the world model.
@@ -294,7 +300,7 @@ PLAYBOOKS ANCHORED TO ME
     always fires on completion:
       - event: capacity_resolved
       - flow: plan_fulfillment
-    hint: Cross-domain conflict resolution. The three context-assembly queries gather typed evidence from logistics (OTIF exposure), commercial (promo flexibility), and external co-manufacturing (availability + premium). The decision is yours — weigh the three advisory criteria against the assembled responses and pick one resolution path. The listed order of the paths is not a ranking. The orchestrator surfaces the decision to a human per its human_involvement policy on supply_planning.
+    hint: Cross-domain conflict resolution. The three context-assembly queries gather typed evidence from logistics (OTIF exposure), commercial (promo flexibility), and external co-manufacturing (availability + premium). Their inputs are projected from the CapacityConflict you were handed — check_otif_exposure runs per at-risk commitment (its sku + retailer), check_coman_availability per competing SKU at the conflict's shortfall and window — so scope each query to those entities, not a sweep of every SKU or retailer. check_promo_flexibility carries no projected inputs because the conflict does not name a promo: derive the promo from the promo-target SKU among the competing SKUs rather than probing arbitrary promo IDs. This is the complete evidence set (closed_set): once the responses are in, proceed to the decision — do not gather more. The decision itself is yours — weigh the three advisory criteria against the assembled responses and pick one resolution path. The listed order of the paths is not a ranking. The orchestrator surfaces the decision to a human per its human_involvement policy on supply_planning.
 
 ---
 TOOLS AVAILABLE TO ME

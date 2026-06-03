@@ -121,13 +121,25 @@ class FSMSummary(_Base):
     governs_flows: tuple[str, ...]
 
 
+class PlaybookInputBindingView(_Base):
+    """One projection of a query input from the playbook's input_quantum:
+    `param` (the query quantum field) is filled from `from_quantum` (a dotted
+    path over the input quantum). Declares the evidence as a function of the
+    situation handed in — never a preference or ordering (§2)."""
+    param: str
+    from_quantum: str
+
+
 class PlaybookQueryStepView(_Base):
     """One context-assembly query step: the query flow and the class it returns.
-    `required` reflects whether the decision waits on it. Order in the rendered
-    list is alphabetical (neutralized) — it is NOT a sequence or a priority."""
+    `required` reflects whether the decision waits on it. `inputs_from_quantum`
+    are the projections that scope the query to the input quantum (empty when
+    the query stays agent-shaped). Order in the rendered list is alphabetical
+    (neutralized) — it is NOT a sequence or a priority."""
     flow: str
     returns: Optional[str] = None
     required: bool = True
+    inputs_from_quantum: tuple[PlaybookInputBindingView, ...] = ()
 
 
 class PlaybookCriterionView(_Base):
@@ -163,6 +175,7 @@ class PlaybookSummary(_Base):
     triggered_by: str
     input_quantum: str
     synchronization: str    # "wait_all" | "wait_any"
+    closed_set: bool = False  # context_assembly is necessary-and-sufficient
     context_assembly: tuple[PlaybookQueryStepView, ...]
     criteria: tuple[PlaybookCriterionView, ...]
     selects_one_of: tuple[PlaybookResolutionView, ...]
@@ -442,11 +455,14 @@ def _render_section_playbooks(view: RoleView) -> list[str]:
         out.append(f"    triggered_by: {pb.triggered_by}")
         out.append(f"    input_quantum: {pb.input_quantum}")
         if pb.context_assembly:
-            out.append(f"    context_assembly (parallel, {pb.synchronization}):")
+            closed = " — complete set; once assembled, decide (do not gather more)" if pb.closed_set else ""
+            out.append(f"    context_assembly (parallel, {pb.synchronization}){closed}:")
             for step in pb.context_assembly:
                 ret = f"  (returns {step.returns})" if step.returns else ""
                 opt = "" if step.required else "  [optional]"
                 out.append(f"      - {step.flow}{ret}{opt}")
+                for binding in step.inputs_from_quantum:
+                    out.append(f"          input {binding.param} <- {pb.input_quantum}.{binding.from_quantum}")
         if pb.criteria:
             out.append("    advisory criteria (evaluated against assembled context at decision time):")
             for c in pb.criteria:

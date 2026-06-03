@@ -40,6 +40,7 @@ from .views import (
     FSMSummary,
     PlaybookCriterionView,
     PlaybookEffectView,
+    PlaybookInputBindingView,
     PlaybookQueryStepView,
     PlaybookResolutionView,
     PlaybookSummary,
@@ -432,6 +433,10 @@ def _to_playbook_summary(
             flow=s.flow,
             returns=(ont.flows[s.flow].body.returns if s.flow in ont.flows else None),
             required=True if s.required is None else bool(s.required),
+            inputs_from_quantum=tuple(
+                PlaybookInputBindingView(param=bnd.param, from_quantum=bnd.from_quantum)
+                for bnd in (s.inputs_from_quantum or [])
+            ),
         )
         for s in steps
     )
@@ -470,6 +475,7 @@ def _to_playbook_summary(
         triggered_by=b.triggered_by,
         input_quantum=b.input_quantum,
         synchronization=_enum_value(b.synchronization) or "wait_all",
+        closed_set=bool(b.closed_set),
         context_assembly=context_assembly,
         criteria=criteria,
         selects_one_of=resolutions,

@@ -453,6 +453,26 @@ class TestPlaybookCrossReferences:
             load_ontology(write_yaml(src))
         assert any("query flow" in i.message for i in exc.value.issues)
 
+    def test_input_binding_must_resolve(self, write_yaml, preamble):
+        # qflow's quantum (Payload) and the input_quantum (Payload) have no such
+        # slots, so both the `param` and the `from_quantum` references dangle.
+        src = preamble + _pb_base("""
+  pb_badbind:
+    instantiates: [scont:Playbook]
+    annotations:
+      scont:domain: dom
+      scont:playbook: >-
+        {"role": "role_a", "triggered_by": "e1", "input_quantum": "Payload",
+         "context_assembly": [{"flow": "qflow",
+            "inputs_from_quantum": [{"param": "ghost_param", "from_quantum": "ghost_src"}]}]}
+      scont:llm_prompt_hint: "bad"
+""")
+        with pytest.raises(OntologyError) as exc:
+            load_ontology(write_yaml(src))
+        fields = [i.field or "" for i in exc.value.issues]
+        assert any("inputs_from_quantum" in f and f.endswith(".param") for f in fields)
+        assert any("inputs_from_quantum" in f and f.endswith(".from_quantum") for f in fields)
+
     def test_single_playbook_per_anchor_enforced(self, write_yaml, preamble):
         src = preamble + _pb_base("""
   pb_one:

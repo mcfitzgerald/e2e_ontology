@@ -287,6 +287,48 @@ class TestPlaybookBody:
         with pytest.raises(ValidationError):
             PlaybookBody.model_validate({**self._minimal(), "llm_prompt_hint": "x"})
 
+    def test_inputs_from_quantum_and_closed_set(self):
+        """Seed C — query steps bind inputs to the input quantum, and the
+        assembly set can be marked closed (necessary-and-sufficient)."""
+        p = PlaybookBody.model_validate(
+            {
+                **self._minimal(),
+                "closed_set": True,
+                "context_assembly": [
+                    {
+                        "flow": "check_coman_availability",
+                        "inputs_from_quantum": [
+                            {"param": "sku", "from_quantum": "competing_skus"},
+                            {"param": "volume", "from_quantum": "shortfall_units"},
+                        ],
+                    },
+                    {"flow": "check_promo_flexibility"},
+                ],
+            }
+        )
+        assert p.closed_set is True
+        step = p.context_assembly[0]
+        assert [(b.param, b.from_quantum) for b in step.inputs_from_quantum] == [
+            ("sku", "competing_skus"),
+            ("volume", "shortfall_units"),
+        ]
+        # closed_set defaults to None (loader treats as open/false).
+        assert PlaybookBody.model_validate(self._minimal()).closed_set is None
+        # a step without bindings stays agent-shaped.
+        assert p.context_assembly[1].inputs_from_quantum is None
+
+    def test_input_binding_requires_both_fields(self):
+        with pytest.raises(ValidationError):
+            PlaybookBody.model_validate(
+                {
+                    **self._minimal(),
+                    "context_assembly": [
+                        {"flow": "check_coman_availability",
+                         "inputs_from_quantum": [{"param": "sku"}]},
+                    ],
+                }
+            )
+
 
 class TestToolBody:
     """Phase 1.8 — Tool body shape."""

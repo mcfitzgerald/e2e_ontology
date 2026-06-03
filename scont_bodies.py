@@ -327,6 +327,17 @@ class MetricBody(ConfiguredBaseModel):
     promotion_target: Optional[str] = Field(default=None, description="""Optional hint that this local metric is a candidate for future promotion to the dbt semantic layer. Informational.""", json_schema_extra = { "linkml_meta": {'domain_of': ['MetricBody']} })
 
 
+class PlaybookInputBinding(ConfiguredBaseModel):
+    """
+    One binding of a context-assembly query's input field to a projection over the playbook's input_quantum. Declares that the evidence the agent gathers is a FUNCTION of the situation it was handed — not discovered by free exploration. `param` names a slot on the query flow's quantum; `from_quantum` is a dotted path rooted at the input_quantum (a slot, or `slot.subslot` to reach a field of a referenced class). A multivalued source slot fans the query out per element; bindings that share the same multivalued root co-index (zip) per element rather than cross-producting. This is derivable world-model (a projection over the input quantum), never preference, ranking, or ordering — see agent_system_design.md §2.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'scont:PlaybookInputBinding',
+         'from_schema': 'https://e2e-ontology.dev/schemas/scont_meta'})
+
+    param: str = Field(default=..., description="""Field on the query flow's quantum that this binding fills. Must resolve to a slot on that quantum class.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookInputBinding']} })
+    from_quantum: str = Field(default=..., description="""Dotted path rooted at the playbook's input_quantum naming the source of the value (e.g. `competing_skus`, `at_risk_commitments.retailer`, `window_start_day`). The first segment must be a slot on the input quantum; a second segment must be a slot on that slot's range class.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookInputBinding']} })
+
+
 class PlaybookQueryStep(ConfiguredBaseModel):
     """
     One context-assembly step in a Playbook: a query flow the anchored role fans out to gather typed context before the decision.
@@ -336,6 +347,7 @@ class PlaybookQueryStep(ConfiguredBaseModel):
 
     flow: str = Field(default=..., description="""Query flow name. Must resolve to a declared flow with `returns:` set (i.e. a request-response query flow).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookQueryStep', 'PlaybookAlwaysFires']} })
     required: Optional[bool] = Field(default=None, description="""Whether this query must complete successfully before the decision proceeds. Defaults true.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookQueryStep']} })
+    inputs_from_quantum: Optional[list[PlaybookInputBinding]] = Field(default=None, description="""Bindings projecting this query's inputs from the playbook's input_quantum, so the agent scopes the query to the situation it was handed rather than sweeping every entity. Order is irrelevant; each binding is independent except that bindings sharing a multivalued source root co-index per element. Optional — a query with no bindings stays fully agent-shaped (e.g. a hypothetical-scenario input the conflict does not name).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookQueryStep']} })
 
 
 class PlaybookDecision(ConfiguredBaseModel):
@@ -372,6 +384,7 @@ class PlaybookBody(ConfiguredBaseModel):
     input_quantum: str = Field(default=..., description="""Quantum class that arrives with the trigger event.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
     context_assembly: Optional[list[PlaybookQueryStep]] = Field(default=None, description="""Query-flow steps the playbook fans out to gather context before the decision. Order in the YAML is authoring convenience and does NOT imply priority or sequence — the orchestrator composes responses per `synchronization`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
     synchronization: Optional[PlaybookSynchronization] = Field(default=None, description="""Wait semantics for context_assembly. wait_all means the decision sees every typed response; wait_any is legitimate only for interchangeable evidence (rare).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
+    closed_set: Optional[bool] = Field(default=None, description="""When true, the context_assembly set is necessary-and-sufficient: once every required response is in, the agent proceeds to the decision and does NOT gather more. Asserts SUFFICIENCY of the evidence set — never priority or ordering among the queries, so it stays §2-eligible (sufficiency is derivable world-model, not policy). `synchronization` governs waiting; `closed_set` governs whether the set is complete. Defaults false (open — the agent may legitimately probe further), preserving prior behavior for playbooks that do not set it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
     decision: Optional[PlaybookDecision] = Field(default=None, description="""The decision shape: advisory criteria relevant to the choice and the resolution flows available. The agent picks; the playbook declares the choice space.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
     always_fires: Optional[list[PlaybookAlwaysFires]] = Field(default=None, description="""Events and/or flows that fire on every successful playbook completion, regardless of resolution path. Structural post-resolution effects.""", json_schema_extra = { "linkml_meta": {'domain_of': ['PlaybookBody']} })
 
@@ -402,6 +415,7 @@ AxiomBody.model_rebuild()
 TransitionBody.model_rebuild()
 StateMachineBody.model_rebuild()
 MetricBody.model_rebuild()
+PlaybookInputBinding.model_rebuild()
 PlaybookQueryStep.model_rebuild()
 PlaybookDecision.model_rebuild()
 PlaybookAlwaysFires.model_rebuild()

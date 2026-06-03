@@ -1487,11 +1487,22 @@ classes:
           "triggered_by": "capacity_conflict_detected",
           "input_quantum": "CapacityConflict",
           "context_assembly": [
-            { "flow": "check_otif_exposure",      "required": true },
+            { "flow": "check_otif_exposure",      "required": true,
+              "inputs_from_quantum": [
+                { "param": "sku",      "from_quantum": "at_risk_commitments.sku" },
+                { "param": "retailer", "from_quantum": "at_risk_commitments.retailer" }
+              ] },
             { "flow": "check_promo_flexibility",  "required": true },
-            { "flow": "check_coman_availability", "required": true }
+            { "flow": "check_coman_availability", "required": true,
+              "inputs_from_quantum": [
+                { "param": "sku",              "from_quantum": "competing_skus" },
+                { "param": "volume",           "from_quantum": "shortfall_units" },
+                { "param": "window_start_day", "from_quantum": "window_start_day" },
+                { "param": "window_end_day",   "from_quantum": "window_end_day" }
+              ] }
           ],
           "synchronization": "wait_all",
+          "closed_set": true,
           "decision": {
             "criteria_refs": [
               "viable_promo_renegotiation",
@@ -1513,7 +1524,16 @@ classes:
         Cross-domain conflict resolution. The three context-assembly queries
         gather typed evidence from logistics (OTIF exposure), commercial (promo
         flexibility), and external co-manufacturing (availability + premium).
-        The decision is yours — weigh the three advisory criteria against the
+        Their inputs are projected from the CapacityConflict you were handed —
+        check_otif_exposure runs per at-risk commitment (its sku + retailer),
+        check_coman_availability per competing SKU at the conflict's shortfall
+        and window — so scope each query to those entities, not a sweep of every
+        SKU or retailer. check_promo_flexibility carries no projected inputs
+        because the conflict does not name a promo: derive the promo from the
+        promo-target SKU among the competing SKUs rather than probing arbitrary
+        promo IDs. This is the complete evidence set (closed_set): once the
+        responses are in, proceed to the decision — do not gather more. The
+        decision itself is yours — weigh the three advisory criteria against the
         assembled responses and pick one resolution path. The listed order of
         the paths is not a ranking. The orchestrator surfaces the decision to a
         human per its human_involvement policy on supply_planning.

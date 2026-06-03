@@ -6,6 +6,44 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-06-03 — Seed C: context-assembly binding (`inputs_from_quantum` + `closed_set`)
+
+Bounds the **completeness sweep** the two Phase 7 live runs showed —
+`supply_planning` fired each context-assembly query per-entity and probed past the
+decision threshold (~30–40% of token spend) because nothing told it the evidence
+set was scoped or complete. This is healthy, *un-budgeted* agency (not a regression
+on the six-pattern heuristic), so the fix is a **playbook schema** enrichment, never
+an orchestrator patch or prompt nudge. Bounds evidence-gathering only; the `decision`
+block is byte-identical and agency over *which path* stays open.
+
+- **Metaschema (`scont_meta.yaml`):** new `PlaybookInputBinding` (`param` ←
+  `from_quantum`); `inputs_from_quantum` on `PlaybookQueryStep` (optional, multivalued)
+  and `closed_set` on `PlaybookBody` (optional boolean, defaults open). `from_quantum`
+  is a dotted path (`slot` or `slot.subslot`) rooted at the `input_quantum`; bindings
+  sharing a multivalued root co-index per element. Both are §2-eligible — a projection
+  over the input quantum is derivable world-model; `closed_set` asserts *sufficiency*,
+  not priority. `scont_bodies.py` regenerated.
+- **Instance (`resolve_capacity_conflict`):** `check_otif_exposure` binds
+  `sku`/`retailer` ← `at_risk_commitments.{sku,retailer}` (per at-risk commitment);
+  `check_coman_availability` binds `sku` ← `competing_skus`, `volume` ←
+  `shortfall_units`, window ← the conflict's window; `closed_set: true`.
+  `check_promo_flexibility` stays **unbound** — the conflict names no promo, so the
+  agent derives it from the promo-target SKU rather than probing arbitrary IDs (hint
+  tightened to say so). `decision` unchanged.
+- **Validation (`exploder.py`):** each binding's `param` must be a slot on the query
+  flow's quantum; `from_quantum` must resolve as a path on the `input_quantum`; the two
+  ranges must match — so "the evidence is a function of the conflict you were handed"
+  is a checked guarantee, not a comment.
+- **Render:** the role view shows each bound input (`input sku <- CapacityConflict.…`)
+  and tightens the `context_assembly` header when `closed_set` ("complete set; once
+  assembled, decide"). `supply_planning` snapshots regenerated.
+- **Tests:** `+1` loader cross-ref test, `+2` body tests, `+1` render test. **258
+  passed** (was 254). Orchestrator suite green (90) against the editable install — no
+  orchestrator change, consistent with the seed scope.
+- **Remaining (gated):** the live `--mode llm` verification (double-fire gone, scoped
+  to the conflict's entities, resolution path still varies by seed — the Phase 5 stop
+  condition) needs an API key + explicit go-ahead.
+
 ### 2026-06-02 — Seed A: baseline-demand grounding (`query_baseline_demand` reader + fixture)
 
 Closes the demand-side grounding gap — the sixth agency-surface pattern (an agent

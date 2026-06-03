@@ -471,6 +471,33 @@ classes:
   # here by design (extra="forbid" would otherwise reject the sibling form).
   # --------------------------------------------------------------------------
 
+  PlaybookInputBinding:
+    class_uri: scont:PlaybookInputBinding
+    description: >-
+      One binding of a context-assembly query's input field to a projection
+      over the playbook's input_quantum. Declares that the evidence the agent
+      gathers is a FUNCTION of the situation it was handed — not discovered by
+      free exploration. `param` names a slot on the query flow's quantum;
+      `from_quantum` is a dotted path rooted at the input_quantum (a slot, or
+      `slot.subslot` to reach a field of a referenced class). A multivalued
+      source slot fans the query out per element; bindings that share the same
+      multivalued root co-index (zip) per element rather than cross-producting.
+      This is derivable world-model (a projection over the input quantum),
+      never preference, ranking, or ordering — see agent_system_design.md §2.
+    attributes:
+      param:
+        description: >-
+          Field on the query flow's quantum that this binding fills. Must
+          resolve to a slot on that quantum class.
+        required: true
+      from_quantum:
+        description: >-
+          Dotted path rooted at the playbook's input_quantum naming the source
+          of the value (e.g. `competing_skus`, `at_risk_commitments.retailer`,
+          `window_start_day`). The first segment must be a slot on the input
+          quantum; a second segment must be a slot on that slot's range class.
+        required: true
+
   PlaybookQueryStep:
     class_uri: scont:PlaybookQueryStep
     description: >-
@@ -487,6 +514,19 @@ classes:
           Whether this query must complete successfully before the decision
           proceeds. Defaults true.
         range: boolean
+        required: false
+      inputs_from_quantum:
+        description: >-
+          Bindings projecting this query's inputs from the playbook's
+          input_quantum, so the agent scopes the query to the situation it was
+          handed rather than sweeping every entity. Order is irrelevant; each
+          binding is independent except that bindings sharing a multivalued
+          source root co-index per element. Optional — a query with no bindings
+          stays fully agent-shaped (e.g. a hypothetical-scenario input the
+          conflict does not name).
+        multivalued: true
+        inlined_as_list: true
+        range: PlaybookInputBinding
         required: false
 
   PlaybookDecision:
@@ -565,6 +605,18 @@ classes:
           every typed response; wait_any is legitimate only for interchangeable
           evidence (rare).
         range: PlaybookSynchronization
+        required: false
+      closed_set:
+        description: >-
+          When true, the context_assembly set is necessary-and-sufficient: once
+          every required response is in, the agent proceeds to the decision and
+          does NOT gather more. Asserts SUFFICIENCY of the evidence set — never
+          priority or ordering among the queries, so it stays §2-eligible
+          (sufficiency is derivable world-model, not policy). `synchronization`
+          governs waiting; `closed_set` governs whether the set is complete.
+          Defaults false (open — the agent may legitimately probe further),
+          preserving prior behavior for playbooks that do not set it.
+        range: boolean
         required: false
       decision:
         description: >-

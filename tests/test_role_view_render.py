@@ -126,9 +126,38 @@ class TestPlaybookRendering:
 
     def test_context_assembly_shows_returns_and_sync(self, svc):
         prompt = svc.render_role_view("supply_planning").as_agent_prompt()
-        assert "context_assembly (parallel, wait_all):" in prompt
+        # closed_set tightens the header in place of the bare ':' form.
+        assert "context_assembly (parallel, wait_all) — complete set" in prompt
         assert "check_otif_exposure  (returns OTIFExposure)" in prompt
         assert "check_coman_availability  (returns ComanAvailability)" in prompt
+
+    def test_context_assembly_inputs_bound_to_input_quantum(self, svc):
+        """Seed C: the query inputs are projected from the CapacityConflict the
+        agent was handed, so it scopes each query to the conflict's entities
+        rather than sweeping. The binding is structural, not a prompt nudge."""
+        v = svc.render_role_view("supply_planning")
+        pb = v.playbooks_anchored_to[0]
+        assert pb.closed_set is True
+        steps = {s.flow: s for s in pb.context_assembly}
+        # coman is scoped to the competing SKUs, the shortfall, and the window.
+        coman = {b.param: b.from_quantum for b in steps["check_coman_availability"].inputs_from_quantum}
+        assert coman == {
+            "sku": "competing_skus",
+            "volume": "shortfall_units",
+            "window_start_day": "window_start_day",
+            "window_end_day": "window_end_day",
+        }
+        # otif co-indexes sku + retailer per at-risk commitment.
+        otif = {b.param: b.from_quantum for b in steps["check_otif_exposure"].inputs_from_quantum}
+        assert otif == {
+            "sku": "at_risk_commitments.sku",
+            "retailer": "at_risk_commitments.retailer",
+        }
+        # promo flexibility stays agent-shaped (the conflict names no promo).
+        assert steps["check_promo_flexibility"].inputs_from_quantum == ()
+        prompt = v.as_agent_prompt()
+        assert "input sku <- CapacityConflict.competing_skus" in prompt
+        assert "input retailer <- CapacityConflict.at_risk_commitments.retailer" in prompt
 
     def test_resolution_paths_neutralized(self, svc):
         """The load-bearing §2 test: resolution paths render alphabetized and

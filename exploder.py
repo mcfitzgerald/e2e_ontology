@@ -1121,6 +1121,101 @@ def _axiom_severity_index(ontology: Ontology) -> dict[str, str | None]:
     return index
 
 
+def _slot_range_index(ontology: Ontology, class_name: str | None) -> dict[str, str | None]:
+    """Map slot name -> range for a class, via SchemaView (includes inherited
+    slots). Returns {} for an unknown/None class so callers can distinguish
+    'class not found' (handled elsewhere) from 'slot not on class'."""
+    if not class_name:
+        return {}
+    try:
+        slots = ontology.schema_view.class_induced_slots(class_name)
+    except Exception:
+        return {}
+    return {s.name: s.range for s in slots}
+
+
+def _resolve_input_bindings(
+    ontology: Ontology,
+    issues: list[ValidationIssue],
+    where: str,
+    step_idx: int,
+    step: Any,
+    *,
+    query_quantum: str | None,
+    input_quantum: str,
+) -> None:
+    """Validate one query step's `inputs_from_quantum` bindings: `param` is a
+    slot on the query flow's quantum, `from_quantum` resolves as a dotted path
+    rooted at the input_quantum, and the source/target ranges are compatible.
+    Range compatibility is what proves the projection is real — a binding that
+    type-checks is grounded, not a wishful reference."""
+    bindings = getattr(step, "inputs_from_quantum", None) or []
+    if not bindings:
+        return
+    param_index = _slot_range_index(ontology, query_quantum)
+    input_index = _slot_range_index(ontology, input_quantum)
+    for j, binding in enumerate(bindings):
+        loc = f"context_assembly[{step_idx}].inputs_from_quantum[{j}]"
+
+        # target: param must be a slot on the query flow's quantum
+        param_range: str | None = None
+        if query_quantum is None:
+            pass  # flow has no quantum; the flow-level error already fired
+        elif binding.param not in param_index:
+            issues.append(
+                ValidationIssue(
+                    "error", where, f"{loc}.param",
+                    f"{binding.param!r} is not a slot on {query_quantum!r} (the query flow's quantum)",
+                )
+            )
+        else:
+            param_range = param_index[binding.param]
+
+        # source: from_quantum is a dotted path rooted at the input_quantum
+        source_range: str | None = None
+        segments = binding.from_quantum.split(".")
+        head = segments[0]
+        if head not in input_index:
+            issues.append(
+                ValidationIssue(
+                    "error", where, f"{loc}.from_quantum",
+                    f"{head!r} is not a slot on the input_quantum {input_quantum!r}",
+                )
+            )
+        elif len(segments) == 1:
+            source_range = input_index[head]
+        elif len(segments) == 2:
+            sub_index = _slot_range_index(ontology, input_index[head])
+            if segments[1] not in sub_index:
+                issues.append(
+                    ValidationIssue(
+                        "error", where, f"{loc}.from_quantum",
+                        f"{segments[1]!r} is not a slot on {input_index[head]!r} "
+                        f"(the range of {head!r})",
+                    )
+                )
+            else:
+                source_range = sub_index[segments[1]]
+        else:
+            issues.append(
+                ValidationIssue(
+                    "error", where, f"{loc}.from_quantum",
+                    f"{binding.from_quantum!r} has more than two path segments; "
+                    "only `slot` or `slot.subslot` are supported",
+                )
+            )
+
+        # range compatibility — only when both ends resolved
+        if param_range is not None and source_range is not None and param_range != source_range:
+            issues.append(
+                ValidationIssue(
+                    "error", where, f"{loc}",
+                    f"range mismatch: query param {binding.param!r} is {param_range!r} "
+                    f"but source {binding.from_quantum!r} is {source_range!r}",
+                )
+            )
+
+
 def _resolve_playbook_references(
     ontology: Ontology, issues: list[ValidationIssue], known_classes: set[str]
 ) -> None:
@@ -1152,6 +1247,17 @@ def _resolve_playbook_references(
                         f"context_assembly[{i}].flow",
                         f"{step.flow!r} is not a query flow (no `returns:` — context assembly needs request-response flows)",
                     )
+                )
+            # inputs_from_quantum[] — each binding's `param` must be a slot on the
+            # query flow's quantum; `from_quantum` must resolve as a (dotted) path
+            # rooted at the playbook's input_quantum; and the two ranges must be
+            # compatible. This is what makes "the evidence is a function of the
+            # conflict you were handed" a checked guarantee rather than a comment.
+            if target is not None:
+                _resolve_input_bindings(
+                    ontology, issues, where, i, step,
+                    query_quantum=target.body.quantum,
+                    input_quantum=b.input_quantum,
                 )
 
         if b.decision is not None:
