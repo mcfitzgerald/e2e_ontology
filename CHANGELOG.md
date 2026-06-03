@@ -6,6 +6,27 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-06-03 — §12.8 resolved: principle settled, `scont:Connector` deferred
+
+With the outbound edge now built (Seed A's `query_baseline_demand` reader), §12.8
+("the ontology exposes the handshakes") is resolved at the **principle** level and
+the `scont:Connector` construct is **deferred**.
+
+- **Contract-in/wire-out confirmed a third time.** The reader's `scont:Tool`
+  declared name + typed I/O + symbolic `implementation`; the orchestrator added only
+  the callable + fixture read. Typed I/O = world model (ontology); endpoint/auth/
+  transport = wire (config).
+- **Idempotency did not resurface on the outbound edge** — a reader is read-only and
+  naturally idempotent. So the one thing that wanted declaring at the inbound edge is
+  a *command* property, not a general edge property; it attaches to the boundary flow
+  if ever declared, not a new bidirectional construct.
+- **Verdict: do not build `scont:Connector`.** The {inbound,outbound}×{command,query}
+  2×2 has three cells realized (inbound-command/query, outbound-query), all agreeing;
+  only outbound-command (A2A) is unbuilt and is the sole site idempotency could recur.
+  **Trigger to reopen:** the first A2A outbound-command edge. Building it before then
+  is the construct-first move §12.7 warns against. `agent_system_design.md` §12 #8
+  updated with the resolution.
+
 ### 2026-06-03 — Seed C: context-assembly binding (`inputs_from_quantum` + `closed_set`)
 
 Bounds the **completeness sweep** the two Phase 7 live runs showed —
