@@ -731,6 +731,55 @@ classes:
         range: SKU
         required: true
 
+  BaselineDemandQuery:
+    description: >-
+      Input to query_baseline_demand: the baseline (pre-promo) demand for a SKU
+      over a window. Lets demand_planning ground the base a promo
+      volume_uplift_factor multiplies, instead of estimating it.
+    annotations:
+      scont:domain: demand
+      scont:subdomain: forecast
+    attributes:
+      sku:
+        description: "SKU to read baseline demand for"
+        range: SKU
+        required: true
+      window_start_day:
+        description: "Window start (day-of-year). Optional; omit for the SKU's standing run-rate."
+        range: integer
+        required: false
+      window_end_day:
+        description: "Window end (day-of-year)."
+        range: integer
+        required: false
+
+  BaselineDemand:
+    description: >-
+      Output of query_baseline_demand: the baseline (pre-promo) demand run-rate
+      for a SKU, from world state. A promo's volume_uplift_factor multiplies
+      this baseline — the absolute SupplyRequest volume must trace to this
+      readable run-rate, not to a guess.
+    annotations:
+      scont:domain: demand
+      scont:subdomain: forecast
+    attributes:
+      sku:
+        description: "SKU the baseline demand is reported for"
+        range: SKU
+        required: true
+      units_per_week:
+        description: "Baseline (pre-promo) demand run-rate, units per week"
+        range: decimal
+        required: true
+      window_start_day:
+        description: "Window start (day-of-year) the run-rate applies to, if scoped"
+        range: integer
+        required: false
+      window_end_day:
+        description: "Window end (day-of-year)."
+        range: integer
+        required: false
+
   # --------------------------------------------------------------------------
   # Roles — meta-typed, lightweight tag + JSON annotation
   # --------------------------------------------------------------------------
@@ -1558,6 +1607,26 @@ classes:
         Read the actual supplier and its committed lead time before drafting a
         ProcurementRequest. The respect_lead_time axiom evaluates against this
         same lead time; reading it up front keeps required-by dates feasible.
+
+  query_baseline_demand:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: demand
+      scont:tool: >-
+        {
+          "description": "Returns the baseline (pre-promo) demand run-rate for a SKU over a window, from world state. A promo's volume_uplift_factor multiplies this baseline.",
+          "category": "reader",
+          "input_class":  "BaselineDemandQuery",
+          "output_class": "BaselineDemand",
+          "implementation": "query_baseline_demand",
+          "deterministic": true,
+          "available_to": ["demand_planning"]
+        }
+      scont:llm_prompt_hint: >-
+        Read the SKU's baseline demand before applying a promo's
+        volume_uplift_factor. Multiply the real baseline by the uplift over the
+        promo window instead of estimating the base — the SupplyRequest volume
+        must trace to a readable baseline, not a guess.
 
 # ============================================================================
 # ENUMS

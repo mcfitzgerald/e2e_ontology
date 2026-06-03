@@ -17,7 +17,8 @@ class TestDemoParity:
         # Phase 1.8: + 7 reader-tool query/result entities (PlantQuery,
         # PlantQueryResult, LineLoadQuery, LineLoad, CommitmentQuery,
         # CommitmentQueryResult, SupplierQuery) → 17 + 7 = 24.
-        assert len(ontology.entities) == 24
+        # Seed A (demand grounding): + BaselineDemandQuery, BaselineDemand → 26.
+        assert len(ontology.entities) == 26
         # Post-Phase-F: + demand_sensing boundary role
         assert len(ontology.roles) == 9
         # Post-Phase-F: + capacity_resolved
@@ -27,8 +28,9 @@ class TestDemoParity:
         # + 3 query + 1 ingress (raise_demand_anomaly) = 15
         assert len(ontology.flows) == 15
         # Phase 1.8: the Scene 5 Playbook + the four reader Tools.
+        # Seed A: + query_baseline_demand reader Tool → 5.
         assert len(ontology.playbooks) == 1
-        assert len(ontology.tools) == 4
+        assert len(ontology.tools) == 5
         assert len(ontology.enums) == 5
 
     def test_entity_names(self, demo_yaml_path):
@@ -47,6 +49,8 @@ class TestDemoParity:
             # Phase 1.8 reader-tool query/result entities
             "PlantQuery", "PlantQueryResult", "LineLoadQuery", "LineLoad",
             "CommitmentQuery", "CommitmentQueryResult", "SupplierQuery",
+            # Seed A demand-grounding reader-tool query/result entities
+            "BaselineDemandQuery", "BaselineDemand",
         }
 
     def test_role_names(self, demo_yaml_path):

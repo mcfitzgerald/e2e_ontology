@@ -124,7 +124,7 @@ You have a fixed set of tools regardless of role. The mapping to your surface:
 - handoff(flow, quantum): your outgoing handoffs (submit_supply_request). Orchestrator validates the quantum and evaluates axioms before propagating.
 - query(flow, query_quantum): your outgoing queries (—). Awaits the typed response.
 - advance_fsm(quantum, trigger): lifecycle transition on a quantum you own (TradePromotionLifecycle). Orchestrator checks the guard and may route via `on_failure_route_to`.
-- call_tool(name, input): invoke a declared tool available to you (—). Reader tools read world state — prefer them over inventing facts. See TOOLS AVAILABLE TO ME below.
+- call_tool(name, input): invoke a declared tool available to you (query_baseline_demand). Reader tools read world state — prefer them over inventing facts. See TOOLS AVAILABLE TO ME below.
 - surface_decision(...): your role's human_involvement is unspecified; the orchestrator's policy decides if and when a human is engaged.
 
 ## Playbooks anchored to me
@@ -133,7 +133,10 @@ You have a fixed set of tools regardless of role. The mapping to your surface:
 
 ## Tools available to me
 
-(none — no tool lists this role in available_to)
+(reader) query_baseline_demand: Returns the baseline (pre-promo) demand run-rate for a SKU over a window, from world state. A promo's volume_uplift_factor multiplies this baseline.
+    input:  BaselineDemandQuery (sku: SKU, window_start_day: integer, window_end_day: integer)
+    output: BaselineDemand (sku: SKU, units_per_week: decimal, window_start_day: integer, window_end_day: integer)
+    hint: Read the SKU's baseline demand before applying a promo's volume_uplift_factor. Multiply the real baseline by the uplift over the promo window instead of estimating the base — the SupplyRequest volume must trace to a readable baseline, not a guess.
 
 ## Advisory criteria (named viability inputs)
 

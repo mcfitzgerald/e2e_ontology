@@ -198,6 +198,20 @@ class TestTools:
         names = [t.name for t in svc.tools_available_to("logistics_planning")]
         assert names == ["query_commitments_in_window"]
 
+    def test_demand_planning_sees_baseline_demand_reader(self, svc):
+        # Seed A: demand_planning had zero reader tools, so it invented the
+        # baseline a promo uplift multiplies. query_baseline_demand grounds it.
+        names = [t.name for t in svc.tools_available_to("demand_planning")]
+        assert names == ["query_baseline_demand"]
+
+    def test_baseline_demand_tool_contract(self, svc):
+        t = next(t for t in svc.tools_available_to("demand_planning")
+                 if t.name == "query_baseline_demand")
+        assert t.body.category == "reader"
+        assert t.body.implementation == "query_baseline_demand"
+        assert t.body.input_class == "BaselineDemandQuery"
+        assert t.body.output_class == "BaselineDemand"
+
     def test_tool_is_reader_with_contract_implementation(self, svc):
         t = next(t for t in svc.tools_available_to("procurement")
                  if t.name == "query_supplier_for_sku")

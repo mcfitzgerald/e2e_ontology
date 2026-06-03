@@ -6,6 +6,39 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-06-02 — Seed A: baseline-demand grounding (`query_baseline_demand` reader + fixture)
+
+Closes the demand-side grounding gap — the sixth agency-surface pattern (an agent
+emitting a schema-valid *number* with no readable anchor; at the Phase 6 live run
+`demand_planning` sized a promo `SupplyRequest` by inventing a baseline). The fix is
+grounding, not a rejection floor (the value is schema-valid) and not a prompt nudge.
+
+- **Contract (shape/vocabulary only — no values in the ontology):** added
+  `BaselineDemandQuery` + `BaselineDemand` entity classes and the
+  `query_baseline_demand` `scont:Tool` (reader, `available_to: [demand_planning]`).
+- **Fixture (`world_state.yaml`):** `baseline_demand` table. `TP-FLAG-6OZ` =
+  1500/wk, tracking its NJ-L1 production baseline so a ×3.0 uplift lands the 3000
+  incremental and the Scene-4 conflict math (6500/5000, 1500/wk shortfall) is
+  **unchanged**; other SKUs track their own production baseline.
+- **Tests/snapshots:** `+2` baseline tests (`test_world_state.py`), `+2`
+  tool-contract tests (`test_ontology_service.py`), integration counts 24→26
+  entities / 4→5 tools. `demand_planning` role-view snapshots regenerated — the
+  tool now appears under TOOLS AVAILABLE TO ME. **254 passed** (was 249).
+- Orchestrator consumes this via its own Seed A commit (reader impl +
+  registration); the contract lands here first.
+
+### 2026-06-01 — Open question §12.8: the ontology exposes the handshakes (edge transport)
+
+- Added open question #8 to `agent_system_design.md` §12: the world fixture + seeded
+  boundaries are shims behind declared edges (boundary roles inbound, `scont:Tool`
+  outbound); should the *transport* (REST/MCP/A2A, endpoint, discovery) become
+  declarative or stay a binding layer? Leaning **contract-in, wire-out**. Folds in
+  the Phase 7 (2026-06-01) inbound-edge evidence: contract-in/wire-out confirmed;
+  idempotency/session is the one thing that wanted declaring → candidate thin
+  `scont:Connector`. Still open pending an *outbound* edge; resolve by experiment.
+  Memo of record in the orchestrator repo:
+  `briefings/design-memo-ontology-exposes-handshakes.md`.
+
 ### 2026-06-01 — Scrub real retailer names (Walmart→Megalomart, Target→Bullseye, Kroger→Greenfield)
 
 - Replaced real retailer names with fictional ones across the ontology, world-state fixture, narrative/design docs, tests, and (regenerated) `docs/` + snapshots: `Walmart`→`Megalomart`, `Target`→`Bullseye`, `Kroger`→`Greenfield`, plus ID abbreviations `WMT`→`MGM`, `TGT`→`BUL`, `KRG`→`GRN` (e.g. `COM-TGT-SEC-Q2`→`COM-BUL-SEC-Q2`, `COM-KRG-SEC-Q2`→`COM-GRN-SEC-Q2`).

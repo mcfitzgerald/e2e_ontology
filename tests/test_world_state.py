@@ -26,6 +26,7 @@ ENTITY_LISTS = [
     ("suppliers", "Supplier"),
     ("retailer_commitments", "RetailerCommitment"),
     ("trade_promotions", "TradePromotion"),
+    ("baseline_demand", "BaselineDemand"),
 ]
 
 
@@ -49,6 +50,7 @@ def test_fixture_parses(fixture):
         "retailer_commitments",
         "trade_promotions",
         "production_schedule",
+        "baseline_demand",
     }
     assert expected_keys.issubset(fixture.keys())
 
@@ -184,6 +186,46 @@ def test_capacity_conflict_math(fixture):
 
     shortfall = with_promo - nj_l1["rated_weekly_capacity"]
     assert shortfall == 1500
+
+
+def test_baseline_demand_grounds_promo_volume(fixture):
+    """The baseline_demand fixture gives demand_planning a readable base for the
+    promo's volume_uplift_factor (report §5 ungrounded-quantity gap). The
+    TP-FLAG-6OZ baseline demand must track its baseline production on NJ-L1 so a
+    grounded agent applying the 3.0x uplift lands on the canonical incremental
+    figure and the derived Scene-4 conflict is unchanged.
+
+    Math:
+        Baseline demand TP-FLAG-6OZ:  1500 units/week  (== production baseline)
+        With 3.0x promo uplift:       4500 units/week
+        Incremental (SupplyRequest):  3000 units/week  (the stub's tuned figure)
+    """
+    flag_baseline = next(
+        b for b in fixture["baseline_demand"] if b["sku"] == "TP-FLAG-6OZ"
+    )
+    # Tracks the week-140 production baseline on NJ-L1 — keeps the conflict math.
+    flag_production = next(
+        e["units"] for e in fixture["production_schedule"]
+        if e["line"] == "NJ-L1" and e["sku"] == "TP-FLAG-6OZ" and e["week_start_day"] == 140
+    )
+    assert flag_baseline["units_per_week"] == flag_production == 1500
+
+    promo = next(
+        p for p in fixture["trade_promotions"]
+        if p["promo_id"] == "PROMO-MGM-FLAG-2026Q2"
+    )
+    uplifted = flag_baseline["units_per_week"] * promo["volume_uplift_factor"]
+    incremental = uplifted - flag_baseline["units_per_week"]
+    assert uplifted == 4500
+    assert incremental == 3000  # grounded SupplyRequest volume, not a free-floating guess
+
+
+def test_baseline_demand_skus_resolve(fixture):
+    """Every baseline_demand row references a real SKU."""
+    sku_codes = {s["sku_code"] for s in fixture["skus"]}
+    for row in fixture["baseline_demand"]:
+        assert row["sku"] in sku_codes, f"baseline_demand references unknown SKU {row['sku']!r}"
+        assert row["units_per_week"] > 0
 
 
 def test_target_at_risk_commitment_exists(fixture):

@@ -317,3 +317,36 @@ production_schedule:
     sku: MW-CLAS-500ML
     week_start_day: 147
     units: 1200
+
+# ----------------------------------------------------------------------------
+# Baseline Demand — instances of the BaselineDemand entity class
+# ----------------------------------------------------------------------------
+# The base a promo's volume_uplift_factor multiplies. Before this fixture
+# existed, demand_planning had no readable baseline and invented one (report §5
+# ungrounded-quantity gap): a live run sized the promo SupplyRequest at 45,000
+# off a guessed ~1,000/day base. query_baseline_demand reads these rows so the
+# agent multiplies a REAL run-rate by the uplift instead of estimating the base.
+#
+# This is an outbound-edge SHIM (design-memo-ontology-exposes-handshakes):
+# the durable artifact is the query_baseline_demand scont:Tool handshake; these
+# rows stand in for a real demand/forecast system behind the same contract.
+#
+# CONSISTENCY CONSTRAINT (load-bearing): TP-FLAG-6OZ baseline DEMAND = 1500/wk
+# tracks its baseline PRODUCTION on NJ-L1 (production_schedule, week 140/147).
+# A grounded demand_planning applying the 3.0x promo uplift then lands the
+# incremental at 1500×3 − 1500 = 3000/wk (the stub's tuned figure), the derived
+# Scene-4 conflict (6500/5000, shortfall 1500/wk) still fires, and the
+# conflict-math assertions in tests/test_world_state.py stay green. Do not pick
+# a number that changes the derived shortfall. Other SKUs track their own
+# week-140 production baseline to keep demand and production commensurable.
+baseline_demand:
+  - sku: TP-FLAG-6OZ
+    units_per_week: 1500
+  - sku: TP-SEC-6OZ
+    units_per_week: 2000
+  - sku: MW-CLAS-500ML
+    units_per_week: 1800
+  - sku: TPB-WHIT-4OZ
+    units_per_week: 1200
+  - sku: TP-KIDS-3OZ
+    units_per_week: 1500
