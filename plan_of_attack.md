@@ -11,6 +11,23 @@
 
 **Format.** Phased milestones with explicit definition-of-done (DoD) per phase. Phases are sequenced because each unlocks the next; within a phase, items may parallelize. Phase 7 (MCP) and Phase 8 (UI) can run in parallel with later transactional-agent phases.
 
+**Progress ledger (2026-06-03).**
+
+| Phase | Status |
+|---|---|
+| 0 — Foundations | ✅ done |
+| 1 — Ontology Service + renderer | ✅ done |
+| 2 — First transactional agent | ✅ done + live-verified |
+| 3 — Multi-role happy path | ✅ done + live-verified |
+| 4 — Deterministic backbone (axioms + FSM) | ✅ done + live-verified |
+| 5 — Playbook + Scene 5 | ✅ done + live-verified |
+| 6 — Resolution + full demo (Scene 6) | ✅ done + live-verified |
+| **7-O — ontology knowledge-MCP** | ⬜ **OPEN** (the read/traverse surface; see Phase 7 note) |
+| **7-S — orchestrator system front door** | ✅ done + live-verified (the inbound edge; not in the original plan) |
+| **8 — Demo UI (trace + decision-surface view)** | ⬜ **OPEN** |
+
+Also landed beyond the plan: baseline-demand grounding (Seed A), playbook context-assembly binding (Seed C), and §12.8 resolved (principle settled, `scont:Connector` deferred). Remaining open design items live in §12 (notably Q2 `tool_ref`, Q3 decision-surface-as-quantum) — both deliberate deferrals, not pending work.
+
 ---
 
 ## Phase 0 — Foundations (this repo)
@@ -209,6 +226,26 @@ Purpose: end-to-end promo whiplash narrative running from a single seed signal.
 ## Phase 7 — MCP front door (this repo, can start after Phase 1)
 
 Purpose: open the ontology to analysis agents and knowledge workers via every LLM client that speaks MCP.
+
+> **Status (2026-06-03) — "Phase 7" split into two distinct MCP surfaces; only one is built. Do not conflate them.**
+>
+> - **7-O — the ontology knowledge-MCP (THIS section; UNBUILT).** A read/traverse
+>   surface over the ontology *structure*: `mcp_server/` in **this** repo wrapping the
+>   Ontology Service, tools like `traverse` / `impact_analysis` / `walk_scenario`,
+>   resources = ontology source/docs/narrative. The DoD below ("if Megalomart's promo
+>   slips a week, who's affected?") is a knowledge worker asking the model questions
+>   about the supply-chain model. **Still open — a fresh build in this repo.**
+> - **7-S — the orchestrator system front door (BUILT + live-verified 2026-06-01/02).**
+>   A *different* surface, in **`e2e_orchestrator/mcp/`**: `ingress_quantum(flow,
+>   payload)` drops a signal into the **running** system, and read-only resources
+>   (`trace://`, `narrative://`, `decisions://`, `roleview://`) project a **run's**
+>   event log. It realizes the inbound boundary edge (`agent_system_design.md` §12.8)
+>   — it is **not** ontology traversal. See the orchestrator README "Phase 7 DoD".
+>
+> Both are legitimately "MCP front doors" and they are complementary (read-the-model
+> vs. drive-the-system), but **the DoD in this section (7-O) is NOT met by 7-S.** 7-S
+> was the breadth proof that actually got built; 7-O — the original knowledge-surface
+> idea, and the one the dev-manager initially pictured — remains to be done.
 
 ### 7.1 MCP server module
 

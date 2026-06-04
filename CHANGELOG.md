@@ -6,6 +6,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-06-03 — plan_of_attack: progress ledger + Phase 7 reconciliation (two MCP surfaces)
+
+- Added an at-a-glance **progress ledger** to `plan_of_attack.md`: Phases 0–6 done
+  + live-verified; Phase 8 (UI) open.
+- **Reconciled the "Phase 7" ambiguity.** Two distinct MCP surfaces were conflated:
+  **7-O** the *planned* ontology knowledge-MCP (this repo's `mcp_server/` wrapping the
+  Ontology Service — read/traverse the structure; DoD "who's affected if the promo
+  slips") is **unbuilt**; **7-S** the orchestrator system front door
+  (`e2e_orchestrator/mcp/` — ingress a signal + read a run's event log) is **built**.
+  They are complementary (read-the-model vs. drive-the-system); the planned Phase 7
+  DoD is *not* met by 7-S. Status note added to the Phase 7 section. The real
+  remaining build queue (7-O, Phase 8, §12 Q2/Q3) is captured in the orchestrator
+  repo's `briefings/dev-manager-resume-2026-06-03.md`.
+
 ### 2026-06-03 — §12.8 resolved: principle settled, `scont:Connector` deferred
 
 With the outbound edge now built (Seed A's `query_baseline_demand` reader), §12.8
