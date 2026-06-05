@@ -6,7 +6,12 @@ onboarding, MCP responses). See `plan_of_attack.md` §1 and
 `agent_system_design.md` §5 + §15.4.
 """
 from .orientation import ORIENTATION
-from .paths import SCONT_META_YAML, SUPPLY_CHAIN_DEMO_YAML, WORLD_STATE_YAML
+from .paths import (
+    SCONT_META_YAML,
+    SUPPLY_CHAIN_DEMO_YAML,
+    WORLD_STATE_BALANCED_YAML,
+    WORLD_STATE_YAML,
+)
 from .service import OntologyService, UnknownRoleError
 from .views import (
     AxiomSummary,
@@ -47,5 +52,6 @@ __all__ = [
     "ORIENTATION",
     "SUPPLY_CHAIN_DEMO_YAML",
     "WORLD_STATE_YAML",
+    "WORLD_STATE_BALANCED_YAML",
     "SCONT_META_YAML",
 ]
