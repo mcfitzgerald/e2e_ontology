@@ -45,8 +45,12 @@ class TestHandoffs:
 
     def test_supply_planning_incoming_handoffs(self, svc):
         names = [f.name for f in svc.incoming_handoffs("supply_planning")]
-        # Recovery + the topology-hinge intake from demand.
+        # Recovery + the topology-hinge intake from demand. Phase A:
+        # allocate_partial_fill is a self-handoff (source == target ==
+        # supply_planning) — the holding move it owns — so it surfaces on both
+        # the incoming and outgoing sides by design.
         assert set(names) == {
+            "allocate_partial_fill",
             "escalate_capacity_conflict",
             "replan_on_infeasible_request",
             "submit_supply_request",
@@ -181,9 +185,12 @@ class TestPlaybooks:
 class TestTools:
     """Phase 1.8 — Tools filtered by available_to."""
 
-    def test_supply_planning_sees_all_four_readers(self, svc):
+    def test_supply_planning_sees_all_readers(self, svc):
         names = [t.name for t in svc.tools_available_to("supply_planning")]
+        # Phase A: + query_coman_availability — supply_planning grounds co-man
+        # viability on facts rather than a pre-baked verdict.
         assert names == [
+            "query_coman_availability",
             "query_commitments_in_window",
             "query_line_load",
             "query_plants_for_sku",

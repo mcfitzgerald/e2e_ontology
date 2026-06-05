@@ -169,9 +169,11 @@ class TestPlaybookRendering:
         assert flows == sorted(flows), "resolution paths must be alphabetized (neutralized)"
         prompt = v.as_agent_prompt()
         assert "resolution paths (pick one; order arbitrary):" in prompt
-        # Each path carries its target role.
-        assert "request_promo_revision  (to customer_development)" in prompt
+        # Each path carries its target role. Phase A: levers hand off to their
+        # owning role — promo revision to trade, the holding move to supply_planning.
+        assert "request_promo_revision  (to trade)" in prompt
         assert "shift_to_coman  (to co_manufacturing)" in prompt
+        assert "allocate_partial_fill  (to supply_planning)" in prompt
 
     def test_criteria_carry_nl(self, svc):
         v = svc.render_role_view("supply_planning")
@@ -179,6 +181,7 @@ class TestPlaybookRendering:
         crit_names = {c.name for c in pb.criteria}
         assert crit_names == {
             "viable_promo_renegotiation", "viable_coman_shift", "tolerable_otif_penalty",
+            "viable_partial_fill",
         }
         # nl text is resolved from the advisory axioms, not left as a bare name.
         assert all(len(c.nl) > 20 for c in pb.criteria)
@@ -221,7 +224,8 @@ class TestPlaybookToolSerialization:
         v = svc.render_role_view("supply_planning")
         data = v.as_json()
         assert data["playbooks_anchored_to"][0]["name"] == "resolve_capacity_conflict"
-        assert len(data["tools_available_to"]) == 4
+        # Phase A: + query_coman_availability reader for supply_planning → 5.
+        assert len(data["tools_available_to"]) == 5
         round_trip = RoleView.model_validate(data)
         assert round_trip == v
 

@@ -163,6 +163,10 @@ classes:
       unit_of_measure:
         description: "Canonical unit for quantity — case, each, kg, l"
         range: string
+      cases_per_pallet:
+        description: "Cases per pallet (the Ti×Hi tier/height pallet build). A packaging/logistics fact about the SKU, not a decision."
+        range: integer
+        minimum_value: 1
       active:
         range: boolean
         required: true
@@ -270,6 +274,10 @@ classes:
         range: integer
         required: true
         minimum_value: 1
+      mfg_lead_time_days:
+        description: "Representative make lead time on this line — days from job release to first good output (changeover + cycle). A capability fact, not a scheduling decision."
+        range: integer
+        minimum_value: 0
       active:
         range: boolean
         required: true
@@ -306,6 +314,12 @@ classes:
         description: "Fraction of COGS charged per OTIF violation (e.g., 0.03 for 3%)"
         range: decimal
         required: true
+      otif_target:
+        description: "Contractual OTIF service-level target this retailer holds the supplier to (fraction, e.g. 0.95 for 95% on-time-in-full). A contract term, not a decision."
+        range: decimal
+      otif_waiver_monthly:
+        description: "Monthly OTIF penalty waiver the retailer grants (dollars) before charges begin — cumulative monthly exposure under this amount is not billed. A contract term."
+        range: decimal
 
   SupplyRequest:
     description: >-
@@ -534,10 +548,13 @@ classes:
 
   ComanAvailability:
     description: >-
-      Co-manufacturing's answer to check_coman_availability. Exposes
-      qualification status, capacity availability in the requested window,
-      and premium cost. Returns class of check_coman_availability. A
-      positive answer makes shift_to_coman a viable resolution path.
+      Co-manufacturing's answer to check_coman_availability (and the output of
+      the query_coman_availability reader tool). Exposes the raw gate FACTS — is
+      the co-man qualified for the SKU, how much capacity is open in the window,
+      the MOQ, the premium, the lead time — rather than a pre-baked "is it
+      viable" verdict. The agent reads these facts and concludes whether
+      shift_to_coman is a viable resolution path (see viable_coman_shift); the
+      ontology never decides for it. Returns class of check_coman_availability.
     annotations:
       scont:domain: manufacturing
       scont:subdomain: co_manufacturing
@@ -545,19 +562,23 @@ classes:
       sku:
         range: SKU
         required: true
-      is_qualified:
-        description: "True if this co-man is already qualified for the SKU"
+      qualified_for_sku:
+        description: "True if this co-man is already qualified to produce the SKU. A gate fact, not a verdict."
         range: boolean
         required: true
-      has_capacity:
-        description: "True if the co-man can accept the volume in the requested window"
-        range: boolean
+      open_window:
+        description: "Units of uncommitted co-man capacity available within the requested promo window. A gate fact — the agent compares it against the volume needed."
+        range: decimal
+        required: true
+      moq:
+        description: "Minimum order quantity (units) the co-man will accept for a run. A gate fact — a need below this cannot be placed."
+        range: decimal
         required: true
       premium_cost_per_unit:
-        description: "Incremental cost above internal production, per unit"
+        description: "Incremental cost above internal production, per unit. An input the agent weighs, not a gate."
         range: decimal
       lead_time_days:
-        description: "Days from shift_to_coman acceptance to first output"
+        description: "Days from shift_to_coman acceptance to first output. An input the agent weighs against the promo window."
         range: integer
 
   DemandAnomaly:
@@ -876,6 +897,28 @@ classes:
           "description": "Boundary role representing an external contract manufacturer qualified to produce specific SKUs on demand. External to the supply chain; the ontology does not model its internals.",
           "llm_prompt_hint": "Receives volume shifts when supply_planning routes production out of internal plants via shift_to_coman — typically to protect another SKU's commitments when internal line capacity is exceeded. Responds to check_coman_availability queries with availability + premium-cost estimates. Treat as external: qualification status, lead times for onboarding, and commercial terms are outside the ontology's modeling scope.",
           "is_boundary": true
+        }
+
+  plant_scheduler:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: manufacturing
+      scont:role: >-
+        {
+          "description": "Owns the detailed line schedule at a plant — sequences jobs, re-times windows, and splits volume across lines to make a revised production plan feasible. The S&OE role-owner for an internal re-plan.",
+          "llm_prompt_hint": "Target role for re_request_production. When supply_planning resolves a capacity conflict by keeping production internal, the REVISED ProductionRequest is handed here to confirm feasibility and commit the line. Read current line load before committing (query_line_load) and which lines can make the SKU (query_plants_for_sku); then advance ProductionRequestLifecycle from `requested`. The line_capacity_not_exceeded guard on the requested → assigned transition still applies — a revised plan that still exceeds capacity re-routes via the guard's on_failure_route_to. Distinct from production_planning, which detects the ORIGINAL conflict and escalates it; this role owns the re-plan that makes the line fit.",
+          "human_involvement": "conditional"
+        }
+
+  trade:
+    instantiates: [scont:Role]
+    annotations:
+      scont:domain: commercial
+      scont:role: >-
+        {
+          "description": "Internal trade / customer-business function that owns the retailer commercial relationship for a promotion. Holds the promo terms internally and engages the external retailer when a promotion needs to be reshaped. The S&OE role-owner for a promo revision.",
+          "llm_prompt_hint": "Target role for request_promo_revision. When supply_planning resolves a capacity conflict by reshaping the promo, the TradePromotion is handed here. Read the at-risk commitments (query_commitments_in_window) and the promo's own commitment_status (carried on the quantum) to confirm what is negotiable — proposed/aligned are openly negotiable, committed needs formal renegotiation, contractually_locked closes the path — then engage the retailer across the boundary via negotiate_promo_with_retailer to customer_development. Internal role (NOT is_boundary): the ontology models trade's handoffs; the retailer itself stays external at customer_development.",
+          "human_involvement": "conditional"
         }
 
   # --------------------------------------------------------------------------
@@ -1260,26 +1303,62 @@ classes:
       scont:flow: >-
         {
           "source_role":   "supply_planning",
-          "target_role":   "production_planning",
+          "target_role":   "plant_scheduler",
           "quantum":       "ProductionRequest",
           "trigger_event": "capacity_resolved",
           "lifecycle_ref": "ProductionRequestLifecycle"
         }
       scont:llm_prompt_hint: >-
-        Internal-resolution re-entry flow. Fires on capacity_resolved when
+        Internal-resolution re-entry lever. Fires on capacity_resolved when
         supply_planning has chosen to keep production internal (resequenced line,
         shifted window, reduced volume, split across lines) rather than shift to
-        co-man or renegotiate the promo. Carries a REVISED ProductionRequest that
-        incorporates the resolution; production_planning treats it as a fresh
-        assignment and re-enters ProductionRequestLifecycle at `requested`. The
-        line_capacity_not_exceeded guard on the `requested → assigned` transition
-        still applies via the shared lifecycle — supply_planning is expected to
-        have verified feasibility during Mode 2 context assembly so the guard
-        passes; if the revised plan still violates capacity, the guard fires and
-        the orchestrator follows its on_failure_route_to back into
+        co-man or renegotiate the promo. Hands a REVISED ProductionRequest to
+        plant_scheduler — the role-owner of the line re-plan — which treats it as a
+        fresh assignment, confirms feasibility, and re-enters ProductionRequestLifecycle
+        at `requested`. The line_capacity_not_exceeded guard on the `requested →
+        assigned` transition still applies via the shared lifecycle — supply_planning
+        is expected to have verified feasibility during Mode 2 context assembly so
+        the guard passes; if the revised plan still violates capacity, the guard
+        fires and the orchestrator follows its on_failure_route_to back into
         escalate_capacity_conflict (which is a supply_planning bug). No axiom is
         declared on this flow directly because the guard lives on the FSM; the
         axiom itself is declared on request_production.
+
+  allocate_partial_fill:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: supply_netops
+      scont:flow: >-
+        {
+          "source_role":   "supply_planning",
+          "target_role":   "supply_planning",
+          "quantum":       "SupplyRequest"
+        }
+      scont:axioms: >-
+        [
+          {
+            "name": "viable_partial_fill",
+            "scope": "flow",
+            "nl": "Allocating a partial fill (allocate_partial_fill) is a structurally viable holding move whenever the constrained available output can be divided across the at-risk demand it serves — i.e. there is some output to ship and more than one claim on it (multiple at_risk_commitments, or a committed volume the available output cannot fully cover). This criterion reports that rationing the available output is possible; it does NOT say which commitment to favour, how to weight retailers, or how to size each split — that allocation is the agent's judgment, read from per-retailer OTIF exposure and order sizes, never a ranking declared here.",
+            "severity": "advisory",
+            "references": {"classes": ["SupplyRequest", "RetailerCommitment", "OTIFExposure"]}
+          }
+        ]
+      scont:llm_prompt_hint: >-
+        Resolution lever — the holding move. When no single path (co-man, promo
+        revision, internal re-plan) fully clears the conflict, or as a first
+        reflexive response while the other paths are assessed, supply_planning
+        rations the constrained available output across the at-risk retailer
+        commitments (partial / fair-share fill) instead of adding capacity or
+        cutting demand. Owned by supply_planning itself (source == target): a single
+        resolving decision kept in one role — it deliberately does NOT transfer
+        constrained-capacity control to a second domain. Reuses the SupplyRequest
+        quantum. The split across retailers is the agent's judgment, grounded in
+        per-retailer OTIF exposure (query_commitments_in_window, check_otif_exposure)
+        and order sizes; the ontology declares the move is available, never how to
+        divide. plan_fulfillment still fires afterwards to push the resulting
+        distribution plan to logistics. No trigger_event: fires as supply_planning's
+        judgment during Mode 2 context assembly.
 
   escalate_capacity_conflict:
     instantiates: [scont:InformationFlow]
@@ -1351,20 +1430,46 @@ classes:
       scont:flow: >-
         {
           "source_role":   "supply_planning",
+          "target_role":   "trade",
+          "quantum":       "TradePromotion",
+          "lifecycle_ref": "TradePromotionLifecycle"
+        }
+      scont:llm_prompt_hint: >-
+        Resolution lever used when supply_planning concludes the cheapest fix is to
+        shrink or reschedule the promo itself. Hands the TradePromotion to trade —
+        the internal role-owner of the retailer commercial relationship — which
+        confirms what is negotiable (TradePromotion.commitment_status: proposed/aligned
+        are openly negotiable; committed requires formal renegotiation;
+        contractually_locked closes the path) and then engages the retailer across
+        the boundary via negotiate_promo_with_retailer. This is the lever the playbook
+        selects; trade owns confirming feasibility and firing the downstream
+        boundary handoff. No trigger_event: fires as a judgment call by
+        supply_planning's agent during Mode 2 context assembly, not on a
+        deterministic event.
+
+  negotiate_promo_with_retailer:
+    instantiates: [scont:InformationFlow]
+    annotations:
+      scont:domain: commercial
+      scont:flow: >-
+        {
+          "source_role":   "trade",
           "target_role":   "customer_development",
           "quantum":       "TradePromotion",
           "lifecycle_ref": "TradePromotionLifecycle"
         }
       scont:llm_prompt_hint: >-
-        Skeletal resolution path used when supply_planning concludes the cheapest
-        fix is to shrink or reschedule the promo itself. Hands a TradePromotion back
-        across the boundary to customer_development for renegotiation — this is NOT
-        an orchestrator-executable operation, it signals a commercial commitment to
-        open with the retailer. Success depends on TradePromotion.commitment_status
-        (proposed/aligned are negotiable; committed requires formal renegotiation;
-        contractually_locked closes this path). No trigger_event: this flow fires
-        as a judgment call by supply_planning's agent during Mode 2 context assembly,
-        not on a deterministic event.
+        Boundary-crossing handoff: trade engages the external retailer (represented
+        by customer_development, is_boundary: true) to renegotiate a promotion's
+        timing or volume. This is the downstream of request_promo_revision — trade
+        owns the relationship internally, confirms the promo is negotiable, then
+        crosses the boundary here. NOT an orchestrator-executable operation; it
+        signals a commercial commitment to open with the retailer. Reuses the
+        TradePromotion quantum so customer_development has the full promo context.
+        Shares TradePromotionLifecycle with submit_promo_plan and
+        request_promo_revision (the renegotiate transition lives there). No
+        trigger_event: fires as trade's judgment once it confirms the promo can be
+        reshaped.
 
   # --------------------------------------------------------------------------
   # Query flows (Phase F4) — request-response. `returns:` declares response shape.
@@ -1447,7 +1552,7 @@ classes:
           {
             "name": "viable_coman_shift",
             "scope": "flow",
-            "nl": "Shifting production to a co-manufacturer (shift_to_coman) is a structurally viable resolution path only when a qualified co-man has capacity in the requested window — ComanAvailability.is_qualified AND has_capacity must both be true. An unqualified co-man or one without window capacity closes the path. The premium cost (premium_cost_per_unit) is an input the agent weighs against the other paths; this criterion reports availability, not whether paying the premium is the right call.",
+            "nl": "Shifting production to a co-manufacturer (shift_to_coman) is a structurally viable resolution path only when a qualified co-man can actually take the work: ComanAvailability.qualified_for_sku must be true, the open_window capacity in the requested window must cover the volume needed, and that volume must be at least the co-man's moq. An unqualified co-man, an open_window smaller than the needed volume, or a need below moq each closes the path. The premium_cost_per_unit and lead_time_days are inputs the agent weighs against the other paths; this criterion reports whether the path is open, not whether paying the premium or accepting the lead time is the right call.",
             "severity": "advisory",
             "references": {"classes": ["ComanAvailability"]}
           }
@@ -1457,8 +1562,11 @@ classes:
         a qualified external line has capacity in the requested window, and at what
         premium. Target role is_boundary: true. `returns: ComanAvailability`. Used
         during Mode 2 context assembly to decide whether shift_to_coman is a viable
-        resolution path for a CapacityConflict. A positive ComanAvailability (is_qualified
-        AND has_capacity) unlocks shift_to_coman as an execution option.
+        resolution path for a CapacityConflict. The returned ComanAvailability carries
+        the gate FACTS (qualified_for_sku, open_window, moq, premium, lead time) — the
+        agent reads them and concludes viability per viable_coman_shift, rather than
+        receiving a pre-baked yes/no. The query_coman_availability reader tool returns
+        the same facts for direct reads.
 
   # --------------------------------------------------------------------------
   # Playbook (Phase 1.8) — the Scene 5 cross-domain conflict-resolution scaffold
@@ -1507,12 +1615,14 @@ classes:
             "criteria_refs": [
               "viable_promo_renegotiation",
               "viable_coman_shift",
-              "tolerable_otif_penalty"
+              "tolerable_otif_penalty",
+              "viable_partial_fill"
             ],
             "selects_one_of": [
               "request_promo_revision",
               "re_request_production",
-              "shift_to_coman"
+              "shift_to_coman",
+              "allocate_partial_fill"
             ]
           },
           "always_fires": [
@@ -1533,10 +1643,16 @@ classes:
         promo-target SKU among the competing SKUs rather than probing arbitrary
         promo IDs. This is the complete evidence set (closed_set): once the
         responses are in, proceed to the decision — do not gather more. The
-        decision itself is yours — weigh the three advisory criteria against the
-        assembled responses and pick one resolution path. The listed order of
-        the paths is not a ranking. The orchestrator surfaces the decision to a
-        human per its human_involvement policy on supply_planning.
+        decision itself is yours — weigh the advisory criteria against the assembled
+        responses and pick one resolution path. Each selected path hands off to the
+        role that owns it, which confirms feasibility and fires the downstream
+        effects: request_promo_revision → trade (which engages the retailer
+        boundary), re_request_production → plant_scheduler (internal line re-plan),
+        shift_to_coman → co_manufacturing (external production), and
+        allocate_partial_fill, the holding move, which supply_planning owns itself
+        (ration the constrained output across the at-risk commitments). The listed
+        order of the paths is not a ranking. The orchestrator surfaces the decision
+        to a human per its human_involvement policy on supply_planning.
 
   # --------------------------------------------------------------------------
   # Tools (Phase 1.8) — four reader tools over world state
@@ -1563,7 +1679,7 @@ classes:
           "output_class": "PlantQueryResult",
           "implementation": "query_plants_for_sku",
           "deterministic": true,
-          "available_to": ["supply_planning"]
+          "available_to": ["supply_planning", "plant_scheduler"]
         }
       scont:llm_prompt_hint: >-
         Use before assigning production: read which lines can actually make the
@@ -1582,7 +1698,7 @@ classes:
           "output_class": "LineLoad",
           "implementation": "query_line_load",
           "deterministic": true,
-          "available_to": ["supply_planning", "production_planning"]
+          "available_to": ["supply_planning", "production_planning", "plant_scheduler"]
         }
       scont:llm_prompt_hint: >-
         Read current scheduled load before proposing or re-proposing production
@@ -1602,7 +1718,7 @@ classes:
           "output_class": "CommitmentQueryResult",
           "implementation": "query_commitments_in_window",
           "deterministic": true,
-          "available_to": ["supply_planning", "logistics_planning"]
+          "available_to": ["supply_planning", "logistics_planning", "trade"]
         }
       scont:llm_prompt_hint: >-
         Read the real retailer commitments at risk in a window rather than
@@ -1647,6 +1763,29 @@ classes:
         volume_uplift_factor. Multiply the real baseline by the uplift over the
         promo window instead of estimating the base — the SupplyRequest volume
         must trace to a readable baseline, not a guess.
+
+  query_coman_availability:
+    instantiates: [scont:Tool]
+    annotations:
+      scont:domain: manufacturing
+      scont:tool: >-
+        {
+          "description": "Returns a co-manufacturer's gate facts for a SKU and window — qualification, open capacity in the window, MOQ, premium, and lead time — from world state.",
+          "category": "reader",
+          "input_class":  "ComanAvailabilityQuery",
+          "output_class": "ComanAvailability",
+          "implementation": "query_coman_availability",
+          "deterministic": true,
+          "available_to": ["supply_planning"]
+        }
+      scont:llm_prompt_hint: >-
+        Read the co-man gate facts before treating shift_to_coman as viable: whether
+        the co-man is qualified for the SKU (qualified_for_sku), how much capacity is
+        open in the promo window (open_window), the MOQ (moq), the premium, and the
+        lead time. The viable_coman_shift criterion is evaluated against these same
+        facts — read them rather than assuming co-man can rescue the volume. Grounded,
+        deterministic counterpart to the check_coman_availability query flow (Seed A
+        pattern: a schema-valid choice isn't caught by a floor; you ground it instead).
 
 # ============================================================================
 # ENUMS

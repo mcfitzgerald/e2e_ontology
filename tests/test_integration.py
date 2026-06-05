@@ -19,18 +19,22 @@ class TestDemoParity:
         # CommitmentQueryResult, SupplierQuery) → 17 + 7 = 24.
         # Seed A (demand grounding): + BaselineDemandQuery, BaselineDemand → 26.
         assert len(ontology.entities) == 26
-        # Post-Phase-F: + demand_sensing boundary role
-        assert len(ontology.roles) == 9
+        # Post-Phase-F: + demand_sensing boundary role.
+        # Phase A: + plant_scheduler, trade (S&OE lever-owners) → 11.
+        assert len(ontology.roles) == 11
         # Post-Phase-F: + capacity_resolved
         assert len(ontology.events) == 8
         assert len(ontology.state_machines) == 4
         # Post-Phase-F: original 3 + 8 handoffs (incl. re_request_production)
-        # + 3 query + 1 ingress (raise_demand_anomaly) = 15
-        assert len(ontology.flows) == 15
+        # + 3 query + 1 ingress (raise_demand_anomaly) = 15.
+        # Phase A: + allocate_partial_fill (holding-move lever) and
+        # negotiate_promo_with_retailer (trade → retailer boundary) → 17.
+        assert len(ontology.flows) == 17
         # Phase 1.8: the Scene 5 Playbook + the four reader Tools.
         # Seed A: + query_baseline_demand reader Tool → 5.
+        # Phase A: + query_coman_availability reader Tool → 6.
         assert len(ontology.playbooks) == 1
-        assert len(ontology.tools) == 5
+        assert len(ontology.tools) == 6
         assert len(ontology.enums) == 5
 
     def test_entity_names(self, demo_yaml_path):
@@ -65,6 +69,8 @@ class TestDemoParity:
             "customer_development",
             "co_manufacturing",
             "demand_sensing",
+            "plant_scheduler",
+            "trade",
         }
 
     def test_boundary_roles_identified(self, demo_yaml_path):
@@ -93,6 +99,9 @@ class TestDemoParity:
             "plan_fulfillment",
             "request_promo_revision",
             "re_request_production",
+            # Phase A: holding-move lever + trade → retailer boundary handoff
+            "allocate_partial_fill",
+            "negotiate_promo_with_retailer",
             # Phase F query flows
             "check_otif_exposure",
             "check_promo_flexibility",

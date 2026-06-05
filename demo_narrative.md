@@ -2,7 +2,7 @@
 
 **Status:** Draft, aligned through discussion. Not yet reflected in the ontology YAML.
 
-**Executive story:** A retailer promotion commitment enters the supply chain through S&OP alignment, then ripples across demand planning, supply/network operations, manufacturing, procurement, and logistics. The ontology enables agents to autonomously detect cross-domain conflicts, assemble context from every affected function, and surface a decision to a human planner with quantified trade-offs — in minutes instead of the days it normally takes. Where resolution is straightforward, agents act autonomously; where trade-offs span domains, they escalate with full context.
+**Executive story:** A retailer promotion commitment enters the supply chain through S&OP alignment, then ripples across demand planning, supply/network operations, manufacturing, procurement, and logistics. ("Promo whiplash" is this demo's name for the classic **bullwhip effect** — a downstream demand swing amplifying as it propagates upstream; here the swing is the promo's incremental volume riding on top of the SKU's baseline run-rate.) The ontology enables agents to autonomously detect cross-domain conflicts, assemble context from every affected function, and surface a decision to a human planner with quantified trade-offs — in minutes instead of the days it normally takes. Where resolution is straightforward, agents act autonomously; where trade-offs span domains, they escalate with full context.
 
 **Industry grounding:** CPG oral/personal/home care (model: P&G, Colgate). 30-40% of CPG volume runs through trade promotions. McKinsey estimates 1-3% of revenue destroyed annually from promotion-supply misalignment. This is recognized as the #1 cross-domain coordination failure in CPG.
 
