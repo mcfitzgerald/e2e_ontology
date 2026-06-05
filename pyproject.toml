@@ -8,13 +8,19 @@ dependencies = [
     "linkml-runtime>=1.7",
     "pydantic>=2.6",
     "pyyaml>=6.0",
+    "mcp>=1.2",  # 7-O knowledge-MCP (mcp_server/) — read-the-model over the Ontology Service
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.23",  # 7-O in-memory ClientSession DoD test
     "linkml>=1.7",  # gen-pydantic, used by `exploder regen-bodies`
 ]
+
+[project.scripts]
+# 7-O — read-the-model knowledge MCP over the Ontology Service (stdio).
+e2e-ontology-mcp = "mcp_server.server:main"
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -28,7 +34,8 @@ build-backend = "setuptools.build_meta"
 # consumption model). See ontology_service/paths.py.
 [tool.setuptools]
 py-modules = ["exploder", "scont_bodies"]
-packages = ["ontology_service"]
+packages = ["ontology_service", "mcp_server"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
