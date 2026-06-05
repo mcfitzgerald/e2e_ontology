@@ -140,22 +140,32 @@ def test_capacity_conflict_math(fixture):
     """The fixture's production schedule + the Megalomart promo uplift creates
     the canonical NJ-L1 capacity conflict (per demo_narrative.md Scene 4).
 
-    Math:
-        NJ-L1 capacity:          5000 units/week
-        Baseline week 140:
+    RESIDUAL-CAPACITY model — NJ-L1 is a real, loaded line, not a toy cell:
+        capacity_total:          50000 units/week (full rated throughput)
+        committed_load:          45000 units/week (~28 other SKUs; aggregate fact)
+        available (residual):     5000 units/week (= 50000 − 45000; 90% utilized)
+        Baseline week 140 (the two toothpaste SKUs on the residual):
           TP-FLAG-6OZ:           1500
           TP-SEC-6OZ:            2000
                                  ----
-          Total baseline:        3500   (70% loaded — fine)
+          Total baseline:        3500   (70% of residual — fine)
         With promo (3× TP-FLAG):
           TP-FLAG-6OZ:           4500   (1500 × 3)
           TP-SEC-6OZ:            2000
                                  ----
-          Total with promo:      6500   (130% — CONFLICT)
-        Shortfall:               1500 units/week
+          Total with promo:      6500   (130% of residual — CONFLICT)
+        Shortfall:               1500 units/week  (unchanged — reframe, not rescale)
     """
     nj_l1 = next(l for l in fixture["production_lines"] if l["line_code"] == "NJ-L1")
-    assert nj_l1["rated_weekly_capacity"] == 5000
+
+    # The line reads as ~50k-total / ~90%-utilized / 5000-residual (credibility bar).
+    assert nj_l1["capacity_total"] == 50000
+    assert nj_l1["committed_load"] == 45000
+    available = nj_l1["capacity_total"] - nj_l1["committed_load"]
+    assert available == 5000  # residual reproduces the old toy "rated capacity"
+    utilization = nj_l1["committed_load"] / nj_l1["capacity_total"]
+    assert 0.70 <= utilization <= 0.95  # realistic loaded line
+    assert utilization == 0.90
 
     megalomart_promo = next(
         p for p in fixture["trade_promotions"]
@@ -164,7 +174,7 @@ def test_capacity_conflict_math(fixture):
     assert megalomart_promo["sku"] == "TP-FLAG-6OZ"
     assert megalomart_promo["volume_uplift_factor"] == 3.0
 
-    # Week 140 baseline load on NJ-L1
+    # Week 140 baseline load on NJ-L1 (the SKUs competing for the residual)
     week_140 = [
         e for e in fixture["production_schedule"]
         if e["line"] == "NJ-L1" and e["week_start_day"] == 140
@@ -173,7 +183,7 @@ def test_capacity_conflict_math(fixture):
     flag_baseline = next(e["units"] for e in week_140 if e["sku"] == "TP-FLAG-6OZ")
 
     assert baseline_total == 3500
-    assert baseline_total < nj_l1["rated_weekly_capacity"]  # baseline alone is fine
+    assert baseline_total < available  # baseline alone fits the residual
 
     # With the promo's uplift on TP-FLAG-6OZ
     with_promo = (
@@ -182,9 +192,10 @@ def test_capacity_conflict_math(fixture):
         + flag_baseline * megalomart_promo["volume_uplift_factor"]
     )
     assert with_promo == 6500
-    assert with_promo > nj_l1["rated_weekly_capacity"]  # the conflict
+    assert with_promo > available  # the conflict — demand exceeds residual
 
-    shortfall = with_promo - nj_l1["rated_weekly_capacity"]
+    # The shortfall is INVARIANT: still exactly 1500/week after the reframe.
+    shortfall = with_promo - available
     assert shortfall == 1500
 
 

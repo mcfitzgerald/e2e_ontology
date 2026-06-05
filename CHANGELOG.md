@@ -6,6 +6,41 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-06-04 — residual-capacity model (line-magnitude realism); Seed Phase A2, Session 1
+
+Closes the Phase-A "toy line" credibility hole: a line that makes 6,500 cases/wk
+and tips over on one SKU reads as a *pilot cell*, not a real line. NJ-L1 is now a
+believable loaded line — **50,000/wk rated, 90% committed, 5,000 residual** — and the
+promo eats into that residual. **Representation reframe, not a rescale: the shortfall
+stays exactly 1,500/wk and the Seed-A baseline stays 1,500/wk, unchanged.**
+
+- **Schema (`supply_chain_demo.yaml`).** `ProductionLine.rated_weekly_capacity`
+  (toy 5,000) → `capacity_total` (full rated throughput) **+** new `committed_load`
+  (one aggregate fact: units already scheduled to the line's ~28 other SKUs).
+  Residual available = `capacity_total − committed_load`. The
+  **`line_capacity_not_exceeded`** axiom now evaluates proposed production against
+  that residual, not the rated total — `expr` RHS is `(… capacity_total − …
+  committed_load)`, `nl:` reframed accordingly. `LineLoad` (query_line_load output)
+  gains `capacity_total`, `committed_load`, `available`, `utilization` (keeps
+  `scheduled_units`). Tool/role/quantum descriptions + hints reworded to residual
+  terms. **§2 clean:** `committed_load` is a *fact*, `available` is arithmetic over
+  facts — no threshold, ranking, or preference. Modeling the ~28 other SKUs as
+  individual claimants on shared capacity would be Tier-2; kept as a single
+  aggregate fact, deferred.
+- **Fixture (`world_state.yaml`).** All four lines carry `capacity_total` (50,000)
+  + `committed_load` (45,000–47,000 → 90–94% utilized); each line's residual
+  reproduces its prior effective capacity exactly (NJ-L1 → 5,000). Conflict-math
+  header and production-schedule comments reframed.
+- **Narrative (`demo_narrative.md`).** Scene 4 + the axiom/entity summaries now read
+  the line in residual terms ("45,000 of 50,000 committed → 5,000 residual; promo
+  overruns it by 1,500/wk").
+- **Tests.** `test_capacity_conflict_math` rewritten to the decomposition — asserts
+  `available == 5000`, `utilization == 0.90`, and the invariant `shortfall == 1500`.
+  Role-view snapshots regenerated (LineLoad output fields + axiom `nl`).
+- **Status.** `validate --strict` clean (0 warnings, 0 errors); **258 tests pass**.
+  This is the Session-1 contract for `e2e_orchestrator` Session 2 (evaluator +
+  `query_line_load` impl consume the residual). No live LLM run.
+
 ### 2026-06-03 — plan_of_attack: progress ledger + Phase 7 reconciliation (two MCP surfaces)
 
 - Added an at-a-glance **progress ledger** to `plan_of_attack.md`: Phases 0–6 done

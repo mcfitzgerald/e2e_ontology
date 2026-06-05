@@ -254,9 +254,11 @@ classes:
 
   ProductionLine:
     description: >-
-      A manufacturing line at a specific plant with a rated weekly production
-      capacity. Referenced by ProductionRequest.assigned_line and read by the
-      line_capacity_not_exceeded axiom during capacity checks.
+      A manufacturing line at a specific plant. A real line runs ~30 SKUs and is
+      mostly committed; its room for new work is the RESIDUAL — capacity_total
+      minus committed_load — not the full rated throughput. Referenced by
+      ProductionRequest.assigned_line and read by the line_capacity_not_exceeded
+      axiom, which evaluates proposed production against that residual.
     annotations:
       scont:domain: manufacturing
       scont:subdomain: capacity
@@ -269,11 +271,16 @@ classes:
         description: "Plant the line belongs to"
         range: string
         required: true
-      rated_weekly_capacity:
-        description: "Maximum units producible per week on this line"
+      capacity_total:
+        description: "Full rated weekly throughput of the line — the maximum units producible per week across all SKUs."
         range: integer
         required: true
         minimum_value: 1
+      committed_load:
+        description: "Units per week already scheduled to the line's other SKUs in the window. A single aggregate fact (not a per-SKU breakdown); the residual available capacity is capacity_total − committed_load."
+        range: integer
+        required: true
+        minimum_value: 0
       mfg_lead_time_days:
         description: "Representative make lead time on this line — days from job release to first good output (changeover + cycle). A capability fact, not a scheduling decision."
         range: integer
@@ -353,9 +360,10 @@ classes:
     description: >-
       Production assignment emitted by supply_planning to production_planning
       after network-level decision (which plant, which line). Quantum of
-      request_production. The line_capacity_not_exceeded axiom traverses
-      {quantum.assigned_line.rated_weekly_capacity} against total scheduled
-      production for the window.
+      request_production. The line_capacity_not_exceeded axiom checks total
+      scheduled production for the window against the assigned line's residual
+      available capacity ({quantum.assigned_line.capacity_total} −
+      {quantum.assigned_line.committed_load}).
     annotations:
       scont:domain: supply_netops
       scont:subdomain: production_request
@@ -638,7 +646,8 @@ classes:
   PlantQueryResult:
     description: >-
       Output of query_plants_for_sku: the production lines (plant + line +
-      rated capacity) that can produce the requested SKU, from world state.
+      capacity_total + committed_load) that can produce the requested SKU, from
+      world state. Residual available capacity is capacity_total − committed_load.
     annotations:
       scont:domain: supply_netops
       scont:subdomain: capacity
@@ -675,8 +684,10 @@ classes:
 
   LineLoad:
     description: >-
-      Output of query_line_load: scheduled production load on a (plant, line)
-      for the requested window, from the world-state production schedule.
+      Output of query_line_load: the residual-capacity picture for a (plant,
+      line) over the requested window. Reports capacity_total, committed_load,
+      and the derived residual available so the agent grounds its reasoning in
+      the line's real headroom, not its toy rated capacity.
     annotations:
       scont:domain: supply_netops
       scont:subdomain: capacity
@@ -697,8 +708,23 @@ classes:
         description: "Day (1-365) the window closes"
         range: integer
         required: true
+      capacity_total:
+        description: "Full rated weekly throughput of the line"
+        range: decimal
+        required: true
+      committed_load:
+        description: "Units already committed to the line's other SKUs in the window (aggregate fact)"
+        range: decimal
+        required: true
+      available:
+        description: "Residual available capacity = capacity_total − committed_load. The real headroom for new production."
+        range: decimal
+        required: true
+      utilization:
+        description: "committed_load / capacity_total, as a fraction (e.g. 0.90 for 90% utilized)"
+        range: decimal
       scheduled_units:
-        description: "Units already scheduled on the line across the window"
+        description: "Units of the explicitly-modeled SKUs already scheduled on the line across the window (consumes part of the residual; distinct from committed_load)"
         range: decimal
         required: true
 
@@ -864,7 +890,7 @@ classes:
       scont:role: >-
         {
           "description": "Owns plant line schedules and executes assigned production. Checks line capacity against requested volume, sequences jobs, and emits capacity_conflict_detected when total demand exceeds rated capacity.",
-          "llm_prompt_hint": "Target role for request_production. Reads ProductionRequest.assigned_line and checks it against the line's rated_weekly_capacity for the requested window (the line_capacity_not_exceeded axiom). On capacity shortfall, emits a CapacityConflict via escalate_capacity_conflict back to supply_planning — does NOT attempt to resolve trade-offs locally. On happy path, the production proceeds and ProductionRequestLifecycle advances."
+          "llm_prompt_hint": "Target role for request_production. Reads ProductionRequest.assigned_line and checks it against the line's RESIDUAL available capacity (capacity_total − committed_load) for the requested window (the line_capacity_not_exceeded axiom) — a loaded line's headroom is the residual, not the rated total. On capacity shortfall, emits a CapacityConflict via escalate_capacity_conflict back to supply_planning — does NOT attempt to resolve trade-offs locally. On happy path, the production proceeds and ProductionRequestLifecycle advances."
         }
 
   logistics_planning:
@@ -906,7 +932,7 @@ classes:
       scont:role: >-
         {
           "description": "Owns the detailed line schedule at a plant — sequences jobs, re-times windows, and splits volume across lines to make a revised production plan feasible. The S&OE role-owner for an internal re-plan.",
-          "llm_prompt_hint": "Target role for re_request_production. When supply_planning resolves a capacity conflict by keeping production internal, the REVISED ProductionRequest is handed here to confirm feasibility and commit the line. Read current line load before committing (query_line_load) and which lines can make the SKU (query_plants_for_sku); then advance ProductionRequestLifecycle from `requested`. The line_capacity_not_exceeded guard on the requested → assigned transition still applies — a revised plan that still exceeds capacity re-routes via the guard's on_failure_route_to. Distinct from production_planning, which detects the ORIGINAL conflict and escalates it; this role owns the re-plan that makes the line fit.",
+          "llm_prompt_hint": "Target role for re_request_production. When supply_planning resolves a capacity conflict by keeping production internal, the REVISED ProductionRequest is handed here to confirm feasibility and commit the line. Read the current line residual before committing (query_line_load — ground on `available` = capacity_total − committed_load, not the rated total) and which lines can make the SKU (query_plants_for_sku); then advance ProductionRequestLifecycle from `requested`. The line_capacity_not_exceeded guard on the requested → assigned transition still applies — a revised plan that still exceeds the residual re-routes via the guard's on_failure_route_to. Distinct from production_planning, which detects the ORIGINAL conflict and escalates it; this role owns the re-plan that makes the line fit.",
           "human_involvement": "conditional"
         }
 
@@ -1277,9 +1303,9 @@ classes:
           {
             "name": "line_capacity_not_exceeded",
             "scope": "flow",
-            "expr": "sum_scheduled_units({quantum.assigned_line}, {quantum.window_start_day}, {quantum.window_end_day}) + {quantum.volume} <= {quantum.assigned_line.rated_weekly_capacity}",
+            "expr": "sum_scheduled_units({quantum.assigned_line}, {quantum.window_start_day}, {quantum.window_end_day}) + {quantum.volume} <= ({quantum.assigned_line.capacity_total} - {quantum.assigned_line.committed_load})",
             "tool_ref": "evaluate_line_capacity_not_exceeded",
-            "nl":   "Total scheduled production on the assigned line for the requested window must not exceed the line's rated weekly capacity.",
+            "nl":   "Total scheduled production on the assigned line for the requested window must not exceed the line's residual available capacity — its full rated throughput (capacity_total) minus what is already committed to other SKUs (committed_load). A loaded line's real headroom is the residual, not the rated total.",
             "severity": "blocking",
             "message":  "Assigned line is over capacity for the requested window",
             "references": {"classes": ["ProductionLine", "ProductionRequest"], "events": ["capacity_conflict_detected"]},
@@ -1692,7 +1718,7 @@ classes:
       scont:domain: supply_netops
       scont:tool: >-
         {
-          "description": "Returns scheduled production load on a (plant, line) for a window, from the world-state production schedule.",
+          "description": "Returns the residual-capacity picture for a (plant, line) over a window: capacity_total, committed_load, residual available, utilization, and scheduled_units, from world state.",
           "category": "reader",
           "input_class":  "LineLoadQuery",
           "output_class": "LineLoad",
@@ -1701,10 +1727,13 @@ classes:
           "available_to": ["supply_planning", "production_planning", "plant_scheduler"]
         }
       scont:llm_prompt_hint: >-
-        Read current scheduled load before proposing or re-proposing production
-        on a line. The line_capacity_not_exceeded axiom evaluates the same
-        world-state schedule deterministically; this tool lets the agent check
-        feasibility up front so the guard passes on first try.
+        Read the line's residual headroom before proposing or re-proposing
+        production. A real line is mostly committed: ground your reasoning in
+        `available` (capacity_total − committed_load), not the rated total — a
+        loaded line at 90% utilization has only a few thousand units of residual.
+        The line_capacity_not_exceeded axiom evaluates the same residual
+        deterministically; this tool lets the agent check feasibility up front
+        so the guard passes on first try.
 
   query_commitments_in_window:
     instantiates: [scont:Tool]

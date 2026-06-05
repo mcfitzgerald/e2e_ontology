@@ -135,7 +135,7 @@ OUTGOING HANDOFFS (WHAT I SEND)
       status: ProductionRequestStatus (required) — Values: requested, assigned, scheduled, in_production, completed, cancelled.
     axioms:
       - line_capacity_not_exceeded [flow, blocking] → on failure: escalate_capacity_conflict
-          Total scheduled production on the assigned line for the requested window must not exceed the line's rated weekly capacity.
+          Total scheduled production on the assigned line for the requested window must not exceed the line's residual available capacity — its full rated throughput (capacity_total) minus what is already committed to other SKUs (committed_load). A loaded line's real headroom is the residual, not the rated total.
 - request_promo_revision (information, to trade): quantum=TradePromotion, lifecycle=TradePromotionLifecycle
     hint: Resolution lever used when supply_planning concludes the cheapest fix is to shrink or reschedule the promo itself. Hands the TradePromotion to trade — the internal role-owner of the retailer commercial relationship — which confirms what is negotiable (TradePromotion.commitment_status: proposed/aligned are openly negotiable; committed requires formal renegotiation; contractually_locked closes the path) and then engages the retailer across the boundary via negotiate_promo_with_retailer. This is the lever the playbook selects; trade owns confirming feasibility and firing the downstream boundary handoff. No trigger_event: fires as a judgment call by supply_planning's agent during Mode 2 context assembly, not on a deterministic event.
     quantum TradePromotion slots:
@@ -338,10 +338,10 @@ TOOLS AVAILABLE TO ME
     input:  CommitmentQuery (sku: SKU, retailer: string, window_start_day: integer, window_end_day: integer)
     output: CommitmentQueryResult (commitments: RetailerCommitment[])
     hint: Read the real retailer commitments at risk in a window rather than inferring them. Feeds the OTIF exposure reasoning during Mode 2 context assembly.
-(reader) query_line_load: Returns scheduled production load on a (plant, line) for a window, from the world-state production schedule.
+(reader) query_line_load: Returns the residual-capacity picture for a (plant, line) over a window: capacity_total, committed_load, residual available, utilization, and scheduled_units, from world state.
     input:  LineLoadQuery (plant_code: string, line_code: string, window_start_day: integer, window_end_day: integer)
-    output: LineLoad (plant_code: string, line_code: string, window_start_day: integer, window_end_day: integer, scheduled_units: decimal)
-    hint: Read current scheduled load before proposing or re-proposing production on a line. The line_capacity_not_exceeded axiom evaluates the same world-state schedule deterministically; this tool lets the agent check feasibility up front so the guard passes on first try.
+    output: LineLoad (plant_code: string, line_code: string, window_start_day: integer, window_end_day: integer, capacity_total: decimal, committed_load: decimal, available: decimal, utilization: decimal, scheduled_units: decimal)
+    hint: Read the line's residual headroom before proposing or re-proposing production. A real line is mostly committed: ground your reasoning in `available` (capacity_total − committed_load), not the rated total — a loaded line at 90% utilization has only a few thousand units of residual. The line_capacity_not_exceeded axiom evaluates the same residual deterministically; this tool lets the agent check feasibility up front so the guard passes on first try.
 (reader) query_plants_for_sku: Returns the production lines (plant + line + capacity) that can produce the given SKU, based on world state.
     input:  PlantQuery (sku: SKU)
     output: PlantQueryResult (lines: ProductionLine[])

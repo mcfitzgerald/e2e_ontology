@@ -40,7 +40,7 @@ Customer development is outside the supply chain. The ontology declares it as a 
 - **Retailer 2:** Bullseye (standing replenishment commitment for Product B, OTIF penalties).
 - **Time horizon:** ~8 weeks out.
 
-Product A and Product B share a manufacturing line at the same plant. The line runs at a known weekly capacity. Both SKUs have standing replenishment commitments to retailers with OTIF (On-Time In-Full) penalty windows.
+Product A and Product B share a manufacturing line at the same plant. The line is already heavily loaded by ~30 other SKUs; only a thin slice of *residual* capacity is open in any given window. Both SKUs have standing replenishment commitments to retailers with OTIF (On-Time In-Full) penalty windows.
 
 ---
 
@@ -84,13 +84,13 @@ Supply planning assigns the production to a specific plant and emits two downstr
 
 ### Scene 4 — Capacity conflict (Manufacturing function)
 
-The production planning agent receives the production request. It checks the line schedule for weeks 6-7 and discovers:
+The production planning agent receives the production request. NJ-L1 is a real, busy line — it runs ~30 SKUs and is already **90% committed** (45,000 of its 50,000/wk rated throughput is spoken for by other products), leaving **5,000 units of residual** in the window. It checks that residual against the toothpaste demand for weeks 6-7 and discovers:
 
-- Product A promo volume requires 80% of line capacity for 2 weeks.
-- Product B is currently scheduled for 40% of that same line during the same window (standing replenishment for Bullseye).
-- **Total demand: 120% of capacity.** Something has to give.
+- Product A promo volume requires 90% of the line's *residual* (4,500 of 5,000).
+- Product B is already scheduled into that same residual (2,000/wk standing replenishment for Bullseye).
+- **Total demand on the residual: 6,500 vs 5,000 available — 130%.** Something has to give.
 
-An axiom fires: **`line_capacity_not_exceeded`** (blocking). The total scheduled production on the line exceeds rated capacity. This is a hard gate — you cannot produce 120% on a line.
+An axiom fires: **`line_capacity_not_exceeded`** (blocking). The proposed production exceeds the line's *residual available capacity* (`capacity_total − committed_load`), not its rated total — the real headroom on a loaded line. The promo overruns that residual by **1,500 units/week**. This is a hard gate — you can't squeeze 6,500 into 5,000 of residual.
 
 The axiom's `on_failure_route_to` directs to `escalate_capacity_conflict`, a flow back to `supply_planning`. The manufacturing agent doesn't decide how to resolve the conflict — it signals the conflict with full context (which SKUs, which line, what the shortfall is, what commitments are at risk) and routes back to the function with network visibility.
 
@@ -204,7 +204,7 @@ customer_development ──(boundary)──→ demand_planning ──→ supply_
 - `ProductionRequest` — assigned production (SKU, volume, window, plant, line)
 - `CapacityConflict` — structured conflict description (line, competing SKUs, shortfall, at-risk commitments)
 - `OTIFExposure` — logistics' calculation of penalty exposure (retailer, SKU, delay, penalty amount)
-- `ProductionLine` — the shared resource with rated capacity
+- `ProductionLine` — the shared resource (`capacity_total`, `committed_load`; residual available = the difference)
 - `RetailerCommitment` — standing delivery commitment (retailer, SKU, volume, MABD window)
 
 ### New roles needed
@@ -239,7 +239,7 @@ customer_development ──(boundary)──→ demand_planning ──→ supply_
 - `otif_exposure_assessed` — logistics has calculated the penalty risk
 
 ### New axioms needed
-- `line_capacity_not_exceeded` — blocking, on `request_production` flow. Hard gate: scheduled production on a line cannot exceed rated capacity.
+- `line_capacity_not_exceeded` — blocking, on `request_production` flow. Hard gate: scheduled production on a line cannot exceed its **residual available capacity** (`capacity_total − committed_load`) — a loaded line's real headroom, not its rated total.
 - (OTIF is modeled as a metric/constraint for soft reasoning, not a blocking axiom.)
 
 ### New state machines needed

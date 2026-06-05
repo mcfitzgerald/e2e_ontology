@@ -19,18 +19,29 @@
 #   8 retailer_commitments
 #   2 trade_promotions
 #
-# Conflict math (Scene 4 / line_capacity_not_exceeded):
-#   NJ-L1 rated_weekly_capacity = 5000
+# Conflict math (Scene 4 / line_capacity_not_exceeded) — RESIDUAL-CAPACITY model:
+#   NJ-L1 is a real, loaded line running ~30 SKUs — not a one-SKU pilot cell:
+#     capacity_total  = 50000   (full rated weekly throughput)
+#     committed_load  = 45000   (ONE aggregate fact: ~28 other SKUs already scheduled)
+#     available       =  5000   (residual = capacity_total − committed_load; 90% utilized)
+#   The two toothpaste SKUs compete for that 5000-unit residual:
 #   Baseline during promo window (week_start_day=140):
 #     TP-FLAG-6OZ:  1500   (existing)
 #     TP-SEC-6OZ:   2000   (Bullseye commitment)
 #                  -----
-#                   3500   (70% load — fine baseline)
+#                   3500   (70% of the 5000 residual — fine baseline)
 #   With Megalomart promo on TP-FLAG-6OZ at 3x uplift:
 #     TP-FLAG-6OZ:  4500   (1500 × 3)
 #     TP-SEC-6OZ:   2000
 #                  -----
-#                   6500   (130% — CONFLICT, shortfall 1500/week)
+#                   6500   (130% of residual — CONFLICT, shortfall 1500/week)
+#
+# This is a representation reframe, NOT a rescale: `available` (5000) reproduces
+# the old toy "rated_weekly_capacity = 5000" exactly, so the shortfall stays
+# 1,500/week and the Seed-A baseline stays 1,500/week — unchanged. committed_load
+# is a single aggregate FACT (modeling the ~28 other SKUs as individual claimants
+# on shared capacity would be Tier-2, deferred); `available` is arithmetic over
+# facts. No policy, threshold, or preference is introduced.
 #
 # Validation: tests/test_world_state.py validates entities against the schema
 # and checks the conflict math.
@@ -94,29 +105,41 @@ skus:
 # compete during the promo window. CA-L1 is the natural alternative
 # (different plant; would require schedule re-sequencing to absorb shifted
 # volume).
+#
+# Each line carries capacity_total (full rated weekly throughput) and
+# committed_load (one aggregate fact: units already scheduled to the line's
+# other SKUs in the window). Residual available = capacity_total −
+# committed_load. Lines run 90–94% utilized — realistic for a loaded plant —
+# so a promo eats into the last few thousand units of residual, not into an
+# empty line. NJ-L1's residual (50000 − 45000 = 5000) reproduces the prior
+# effective capacity exactly; the conflict and shortfall are unchanged.
 
 production_lines:
   - line_code: NJ-L1
     plant_code: PLANT-NJ
-    rated_weekly_capacity: 5000
+    capacity_total: 50000      # full rated throughput
+    committed_load: 45000      # ~28 other SKUs already scheduled → 90% utilized
     mfg_lead_time_days: 7
-    active: true
+    active: true               # residual available = 5000 (the conflict surface)
 
   - line_code: NJ-L2
     plant_code: PLANT-NJ
-    rated_weekly_capacity: 3500
+    capacity_total: 50000
+    committed_load: 46500      # 93% utilized → residual available = 3500
     mfg_lead_time_days: 7
     active: true
 
   - line_code: CA-L1
     plant_code: PLANT-CA
-    rated_weekly_capacity: 4000
+    capacity_total: 50000
+    committed_load: 46000      # 92% utilized → residual available = 4000
     mfg_lead_time_days: 10
     active: true
 
   - line_code: CA-L2
     plant_code: PLANT-CA
-    rated_weekly_capacity: 3000
+    capacity_total: 50000
+    committed_load: 47000      # 94% utilized → residual available = 3000
     mfg_lead_time_days: 14
     active: true
 
@@ -282,14 +305,16 @@ trade_promotions:
 # ----------------------------------------------------------------------------
 # Production Schedule — supplementary world state (no ontology class)
 # ----------------------------------------------------------------------------
-# Baseline weekly production keyed by (line, sku, week_start_day). Drives
-# line_capacity_not_exceeded by giving the axiom evaluator the existing
-# load against which proposed production is summed.
+# Baseline weekly production keyed by (line, sku, week_start_day). These rows
+# are the explicitly-modeled SKUs competing for each line's RESIDUAL (they are
+# NOT the same as committed_load, which is the aggregate of the line's ~28 other
+# SKUs). line_capacity_not_exceeded sums these scheduled units and the proposed
+# production against the residual available (capacity_total − committed_load).
 #
-# Covers two weeks in the conflict window (days 140-153, the promo's
-# production ramp). Without the promo, NJ-L1 runs at 3500/5000 (70%).
-# With the promo on TP-FLAG-6OZ at 3x, projected load is 6500/5000 (130%)
-# — the conflict that drives the demo.
+# Covers two weeks in the conflict window (days 140-153, the promo's production
+# ramp). Without the promo, the two toothpaste SKUs use 3500 of NJ-L1's 5000
+# residual (70%). With the promo on TP-FLAG-6OZ at 3x, projected load is 6500
+# against the 5000 residual (130%) — the conflict that drives the demo.
 
 production_schedule:
   # NJ-L1 — the shared toothpaste line; the canonical conflict surface
