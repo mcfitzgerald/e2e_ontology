@@ -17,4 +17,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 SUPPLY_CHAIN_DEMO_YAML: Path = _REPO_ROOT / "supply_chain_demo.yaml"
 WORLD_STATE_YAML: Path = _REPO_ROOT / "world_state.yaml"
+# Phase A3 balanced variant: world_state.yaml + the K1 delta (CA-L1 made a
+# grounded alternative line for the flagship) so internal re-plan is a viable
+# lever live. See world_state_balanced.yaml's header + seed-phase-A3.
+WORLD_STATE_BALANCED_YAML: Path = _REPO_ROOT / "world_state_balanced.yaml"
 SCONT_META_YAML: Path = _REPO_ROOT / "scont_meta.yaml"
