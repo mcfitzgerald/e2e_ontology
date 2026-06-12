@@ -7,13 +7,17 @@ import { EntityPanel } from './panels/EntityPanel';
 import { EventPanel } from './panels/EventPanel';
 import { FSMPanel } from './panels/FSMPanel';
 import { FlowPanel } from './panels/FlowPanel';
+import { PlaybookPanel } from './panels/PlaybookPanel';
 import { RolePanel } from './panels/RolePanel';
+import { ToolPanel } from './panels/ToolPanel';
 import {
   entityByName,
   eventByName,
   flowByName,
   fsmByName,
+  playbookByName,
   roleByName,
+  toolByName,
 } from './panels/helpers';
 import './ContextPanel.css';
 
@@ -96,6 +100,14 @@ export function ContextPanel({ data, collapsed, onToggleCollapsed }: Props) {
       }
       case 'axiom':
         return <AxiomPanel axiomName={selection.id} data={data} onNavigate={navigate} />;
+      case 'playbook': {
+        const playbook = playbookByName(data, selection.id);
+        return playbook ? <PlaybookPanel playbook={playbook} data={data} onNavigate={navigate} /> : <NotFound kind="playbook" id={selection.id} />;
+      }
+      case 'tool': {
+        const tool = toolByName(data, selection.id);
+        return tool ? <ToolPanel tool={tool} data={data} onNavigate={navigate} /> : <NotFound kind="tool" id={selection.id} />;
+      }
       default:
         return null;
     }
@@ -106,7 +118,7 @@ function EmptyState() {
   return (
     <div className="context-empty">
       <p className="context-empty-hint">↖</p>
-      <p>Click any role, flow, event, or axiom dot in the graph to see details here.</p>
+      <p>Click any role, flow, event, axiom, playbook, or tool in the graph to see details here.</p>
       <p className="context-empty-sub">
         Chips inside the panel navigate to related elements. Use the breadcrumb above to retrace.
       </p>

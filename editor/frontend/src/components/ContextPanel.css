@@ -407,6 +407,84 @@
 .chip--state_machine { background: #e6e0ef; }
 .chip--entity { background: #efe8d7; }
 .chip--axiom { background: #f7dfd9; }
+.chip--playbook { background: #e0ece3; }
+.chip--tool { background: #e9e4f0; }
+
+/* ===== Playbook panel ===== */
+.panel-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--paper-dark);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+.playbook-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.playbook-step {
+  border-left: 2px solid var(--ink-muted);
+  padding: 5px 8px;
+  background: var(--paper-dark);
+}
+.playbook-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.playbook-step-opt {
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  border: 1px solid var(--ink-muted);
+  border-radius: 1px;
+  padding: 0 4px;
+}
+.playbook-bindings {
+  list-style: none;
+  padding: 0;
+  margin: 5px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.playbook-bindings li {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 10.5px;
+}
+.playbook-bind-param {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+.playbook-bind-arrow { color: var(--ink-muted); }
+.playbook-bind-src {
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+}
+.playbook-decision-sub {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  margin: 8px 0 4px;
+}
+.playbook-decision-sub:first-child { margin-top: 0; }
+.playbook-note {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--ink-muted);
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
 
 /* ===== Axiom list inside FlowPanel ===== */
 .axiom-list {

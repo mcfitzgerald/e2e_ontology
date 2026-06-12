@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ScreenId = 'structure' | 'cascade' | 'fsm';
+export type ScreenId = 'structure' | 'cascade' | 'fsm' | 'playbook';
 
 interface ScreenState {
   current: ScreenId;
@@ -8,7 +8,7 @@ interface ScreenState {
 }
 
 const STORAGE_KEY = 'editor.screen';
-const VALID: readonly ScreenId[] = ['structure', 'cascade', 'fsm'];
+const VALID: readonly ScreenId[] = ['structure', 'cascade', 'fsm', 'playbook'];
 
 function readInitial(): ScreenId {
   try {

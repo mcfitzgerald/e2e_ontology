@@ -6,6 +6,7 @@ const SCREEN_KEYS: Record<string, ScreenId> = {
   g: 'structure',
   c: 'cascade',
   f: 'fsm',
+  p: 'playbook',
 };
 
 // Don't hijack keys while the user is typing into form controls (cascade

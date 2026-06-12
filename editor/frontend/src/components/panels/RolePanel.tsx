@@ -1,7 +1,7 @@
 import type { OntologyPayload, Role } from '../../api/types';
 import type { Selection } from '../../store/ontology';
 import { Chip } from '../Chip';
-import { incomingFlows, observedEvents, outgoingFlows } from './helpers';
+import { incomingFlows, observedEvents, outgoingFlows, playbooksForRole, toolsAvailableTo } from './helpers';
 import { ChipList, HintBlock, PanelHeader, Row, Section } from './shared';
 
 interface Props {
@@ -14,6 +14,8 @@ export function RolePanel({ role, data, onNavigate }: Props) {
   const outgoing = outgoingFlows(data, role.name);
   const incoming = incomingFlows(data, role.name);
   const events = observedEvents(data, role.name);
+  const playbooks = playbooksForRole(data, role.name);
+  const tools = toolsAvailableTo(data, role.name);
   const kindLabel = role.is_boundary ? 'boundary role' : 'role';
 
   return (
@@ -69,6 +71,30 @@ export function RolePanel({ role, data, onNavigate }: Props) {
             {events.map((e) => (
               <Chip key={e.name} kind="event" onClick={() => onNavigate({ kind: 'event', id: e.name })}>
                 {e.name}
+              </Chip>
+            ))}
+          </ChipList>
+        </Section>
+      )}
+
+      {playbooks.length > 0 && (
+        <Section title={`playbooks (${playbooks.length})`}>
+          <ChipList>
+            {playbooks.map((p) => (
+              <Chip key={p.name} kind="playbook" onClick={() => onNavigate({ kind: 'playbook', id: p.name })}>
+                {p.name}
+              </Chip>
+            ))}
+          </ChipList>
+        </Section>
+      )}
+
+      {tools.length > 0 && (
+        <Section title={`tools available (${tools.length})`}>
+          <ChipList>
+            {tools.map((t) => (
+              <Chip key={t.name} kind="tool" onClick={() => onNavigate({ kind: 'tool', id: t.name })}>
+                {t.name}
               </Chip>
             ))}
           </ChipList>

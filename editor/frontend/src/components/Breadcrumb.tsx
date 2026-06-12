@@ -7,6 +7,8 @@ const KIND_ICON: Record<string, string> = {
   state_machine: '○',
   entity: '▢',
   axiom: '!',
+  playbook: '▷',
+  tool: '⚒',
 };
 
 export function Breadcrumb() {

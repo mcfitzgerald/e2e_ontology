@@ -2,7 +2,15 @@ import { create } from 'zustand';
 import { fetchOntology } from '../api/client';
 import type { OntologyPayload } from '../api/types';
 
-export type SelectionKind = 'role' | 'flow' | 'event' | 'state_machine' | 'entity' | 'axiom';
+export type SelectionKind =
+  | 'role'
+  | 'flow'
+  | 'event'
+  | 'state_machine'
+  | 'entity'
+  | 'axiom'
+  | 'playbook'
+  | 'tool';
 
 export interface Selection {
   kind: SelectionKind;

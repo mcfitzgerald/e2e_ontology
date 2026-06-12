@@ -109,5 +109,11 @@ function mapKind(s: SelectionKind): DiffKind | null {
       // paths surface them via 'axioms.<name>.severity' inside the parent
       // flow's change list. Skip the panel-diff banner for axioms.
       return null;
+    case 'playbook':
+    case 'tool':
+      // Playbooks/Tools aren't diffed by the backend yet (DiffKind has no
+      // entry). Skip the banner rather than mis-mapping; revisit if diff.py
+      // gains playbook/tool deltas.
+      return null;
   }
 }

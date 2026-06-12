@@ -1,0 +1,326 @@
+/* ===== Playbook choreography screen =====
+ * Left-to-right fan-out: trigger / anchor / input → playbook → context-assembly
+ * queries, resolution paths, always-fires effects. A rail carries the summary,
+ * advisory criteria, and the tool capability surface for the anchored role.
+ * Branch families are color-accented; resolution order is deliberately NOT
+ * encoded (the playbook declares the choice space, never a ranking).
+ */
+
+.pb {
+  flex: 1;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.pb-rail-panel,
+.pb-canvas-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pb-resize-handle {
+  flex-shrink: 0;
+  width: 6px;
+  background: var(--paper);
+  border-right: 1.5px solid var(--ink);
+  cursor: col-resize;
+  position: relative;
+  transition: background 120ms ease;
+}
+.pb-resize-handle:hover,
+.pb-resize-handle[data-resize-handle-active] {
+  background: var(--paper-dark);
+}
+.pb-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  margin-left: -1px;
+  margin-top: -14px;
+  background: var(--ink-muted);
+  opacity: 0.5;
+  border-radius: 1px;
+}
+.pb-resize-handle:hover::after { opacity: 1; }
+
+.pb-rail {
+  width: 100%;
+  height: 100%;
+  border-right: 1.5px solid var(--ink);
+  padding: 14px 14px 40px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  background: var(--paper);
+  box-sizing: border-box;
+}
+.pb-rail h4 {
+  margin: 16px 0 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.pb-rail h4:first-of-type { margin-top: 0; }
+
+.pb-picker {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid var(--ink-muted);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 2px;
+}
+.pb-picker:focus { border-color: var(--ink); outline: none; }
+
+.pb-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+.pb-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.pb-summary-k {
+  color: var(--ink-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.pb-summary-v {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  text-align: right;
+  word-break: break-word;
+}
+button.pb-summary-v.link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+button.pb-summary-v.link:hover { color: var(--ink); text-decoration-style: solid; }
+
+.pb-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pb-rail-item {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--paper-dark);
+  border: 1px solid transparent;
+  border-left: 2px solid var(--ink-muted);
+  border-radius: 2px;
+  padding: 4px 7px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pb-rail-item:hover { color: var(--ink); border-color: var(--ink-muted); }
+.pb-rail-item.criterion { border-left-color: var(--axiom-advisory); }
+.pb-rail-item.tool { border-left-color: #7a6fa0; }
+.pb-rail-item.tool.muted { opacity: 0.6; }
+.pb-rail-item.tool.muted:hover { opacity: 1; }
+.pb-tool-cat {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  background: var(--paper);
+  border: 1px solid var(--ink-muted);
+  border-radius: 1px;
+  padding: 0 3px;
+  flex-shrink: 0;
+}
+.pb-tool-cat.reader { color: #3b6a96; border-color: #3b6a96; }
+.pb-tool-cat.compute { color: #7a6fa0; border-color: #7a6fa0; }
+.pb-rail-empty {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.pb-note {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--ink-muted);
+  padding: 6px 8px;
+  background: var(--paper-dark);
+  margin-top: 14px;
+}
+.pb-note-label {
+  display: block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+
+.pb-canvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+  box-sizing: border-box;
+}
+.pb-empty {
+  padding: 60px 40px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* ===== Nodes ===== */
+.rf-pb-node {
+  width: 196px;
+  height: 48px;
+  background: var(--paper);
+  border: 1.3px solid var(--ink);
+  border-left-width: 4px;
+  border-radius: 3px;
+  position: relative;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  cursor: default;
+}
+.rf-pb-node.clickable { cursor: pointer; }
+.rf-pb-node.clickable:hover { background: var(--paper-dark); }
+.rf-pb-node.selected { border-color: var(--ink); background: #fff6cf; box-shadow: 0 0 0 1.5px var(--ink); }
+.rf-pb-node.dimmed { opacity: 0.3; }
+.rf-pb-node--source { border-left-color: var(--ink-muted); }
+.rf-pb-node--query { border-left-color: var(--flow-information); }
+.rf-pb-node--resolution { border-left-color: var(--flow-material); }
+.rf-pb-node--effect { border-left-color: var(--axiom-warning); }
+.rf-pb-node--playbook {
+  width: 216px;
+  height: 62px;
+  border-width: 2px;
+  border-left-width: 2px;
+  background: #e0ece3;
+  box-shadow: 4px 4px 0 var(--paper-dark);
+}
+.rf-pb-node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+.rf-pb-node-tag {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+}
+.rf-pb-node-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-pb-node--playbook .rf-pb-node-name { font-size: 13.5px; }
+
+/* ===== Edges ===== */
+.pb-canvas .rf-pb-edge path { stroke-width: 1.6; }
+.pb-canvas .rf-pb-edge--trigger path { stroke: var(--ink-muted); stroke-dasharray: 4 3; }
+.pb-canvas .rf-pb-edge--assembly path { stroke: var(--flow-information); }
+.pb-canvas .rf-pb-edge--resolution path { stroke: var(--flow-material); }
+.pb-canvas .rf-pb-edge--effect path { stroke: var(--axiom-warning); stroke-dasharray: 1 4; }
+
+/* ===== Legend ===== */
+.pb-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  border: 1px solid var(--ink-muted);
+  border-radius: 3px;
+  padding: 7px 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.pb-legend-item { display: flex; align-items: center; gap: 6px; }
+.pb-legend-swatch {
+  width: 12px;
+  height: 4px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.pb-legend-swatch.source { background: var(--ink-muted); }
+.pb-legend-swatch.query { background: var(--flow-information); }
+.pb-legend-swatch.resolution { background: var(--flow-material); }
+.pb-legend-swatch.effect { background: var(--axiom-warning); }
+
+/* React Flow overrides scoped to the pb canvas (mirror FSM) */
+.pb-canvas .react-flow,
+.pb-canvas .react-flow__renderer,
+.pb-canvas .react-flow__pane {
+  background: transparent;
+}
+.pb-canvas .react-flow__node {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.pb-canvas .react-flow__node.selected { box-shadow: none; }
+.pb-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.pb-canvas .react-flow__controls button {
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink-muted);
+  color: var(--ink);
+}
+.pb-canvas .react-flow__controls button:hover { background: var(--paper-dark); }
+.pb-canvas .react-flow__attribution {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  opacity: 0.5;
+  background: transparent;
+}
+.pb-canvas .rf-handle {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}

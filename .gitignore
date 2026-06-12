@@ -28,3 +28,7 @@ Thumbs.db
 
 # Claude Code session state
 .claude/
+claude_plans/
+
+# Generated LinkML class/slot docs (gen-doc output; regenerate from the schema)
+docs/

@@ -1,7 +1,7 @@
 import type { Event, OntologyPayload } from '../../api/types';
 import type { Selection } from '../../store/ontology';
 import { Chip } from '../Chip';
-import { flowsTriggeredBy } from './helpers';
+import { flowsTriggeredBy, playbooksTriggeredBy } from './helpers';
 import { ChipList, HintBlock, PanelHeader, Row, Section } from './shared';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
 
 export function EventPanel({ event, data, onNavigate }: Props) {
   const triggered = flowsTriggeredBy(data, event.name);
+  const playbooks = playbooksTriggeredBy(data, event.name);
 
   return (
     <article className="panel panel--event">
@@ -41,6 +42,18 @@ export function EventPanel({ event, data, onNavigate }: Props) {
           ))}
         </ChipList>
       </Section>
+
+      {playbooks.length > 0 && (
+        <Section title={`triggers playbooks (${playbooks.length})`}>
+          <ChipList>
+            {playbooks.map((p) => (
+              <Chip key={p.name} kind="playbook" onClick={() => onNavigate({ kind: 'playbook', id: p.name })}>
+                {p.name}
+              </Chip>
+            ))}
+          </ChipList>
+        </Section>
+      )}
 
       {event.llm_prompt_hint && (
         <HintBlock label="llm context">{event.llm_prompt_hint}</HintBlock>

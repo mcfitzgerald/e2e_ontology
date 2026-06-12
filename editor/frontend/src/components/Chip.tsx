@@ -1,6 +1,14 @@
 import type { ReactNode } from 'react';
 
-export type ChipKind = 'role' | 'flow' | 'event' | 'state_machine' | 'entity' | 'axiom';
+export type ChipKind =
+  | 'role'
+  | 'flow'
+  | 'event'
+  | 'state_machine'
+  | 'entity'
+  | 'axiom'
+  | 'playbook'
+  | 'tool';
 
 interface ChipProps {
   kind?: ChipKind;

@@ -6,7 +6,9 @@ The editor renders live state from `supply_chain_demo.yaml` via `exploder.load_o
 
 ## Status
 
-MVP complete on branch `feat/editor-frontend`, ready to merge. Three React Flow screens (Structure swimlane / Cascade / FSM detail) plus ambient diff gutters, context panel with relational navigation, resizable rails, keyboard shortcuts (`g` / `c` / `f` / `esc`), and a live `supply_chain_demo.yaml` data path through the FastAPI backend.
+MVP complete on branch `feat/editor-frontend`, ready to merge. Four React Flow screens (Structure swimlane / Cascade / FSM detail / Playbook choreography) plus ambient diff gutters, context panel with relational navigation, resizable rails, keyboard shortcuts (`g` / `c` / `f` / `p` / `esc`), and a live `supply_chain_demo.yaml` data path through the FastAPI backend.
+
+The context panel covers every meta-typed construct — Role, Flow, Event, StateMachine, Entity, Axiom, **Playbook**, and **Tool**. The Playbook screen renders a playbook's choreography (trigger / anchor / input → playbook → context-assembly queries, resolution paths, always-fires effects) with the anchored role's tool capability surface in the rail.
 
 Next directions (not yet picked): filter rail · authoring overlay (Screen 3) + write-through API · orchestrator-side read API (design draft §12).
 

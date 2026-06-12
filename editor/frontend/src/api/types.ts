@@ -91,6 +91,61 @@ export interface Entity {
   metrics: string[];
 }
 
+export type PlaybookSynchronization = 'wait_all' | 'wait_any';
+
+export type ToolCategory = 'reader' | 'compute';
+
+export interface PlaybookInputBinding {
+  param: string;
+  from_quantum: string;
+}
+
+export interface PlaybookQueryStep {
+  flow: string;
+  /** null = unspecified (treated as required); false = optional. */
+  required: boolean | null;
+  inputs_from_quantum: PlaybookInputBinding[];
+}
+
+export interface PlaybookDecision {
+  criteria_refs: string[];
+  selects_one_of: string[];
+}
+
+export interface PlaybookAlwaysFires {
+  event: string | null;
+  flow: string | null;
+}
+
+export interface Playbook {
+  name: string;
+  domain: string | null;
+  subdomain: string | null;
+  role: string;
+  triggered_by: string;
+  input_quantum: string;
+  synchronization: PlaybookSynchronization | null;
+  closed_set: boolean | null;
+  context_assembly: PlaybookQueryStep[];
+  decision: PlaybookDecision | null;
+  always_fires: PlaybookAlwaysFires[];
+  llm_prompt_hint: string | null;
+}
+
+export interface Tool {
+  name: string;
+  domain: string | null;
+  subdomain: string | null;
+  description: string;
+  category: ToolCategory | null;
+  input_class: string;
+  output_class: string;
+  implementation: string;
+  deterministic: boolean | null;
+  available_to: string[];
+  llm_prompt_hint: string | null;
+}
+
 export interface ValidationIssue {
   level: 'error' | 'warning';
   element: string;
@@ -105,6 +160,8 @@ export interface OntologyPayload {
   flows: Flow[];
   state_machines: StateMachine[];
   entities: Entity[];
+  playbooks: Playbook[];
+  tools: Tool[];
   warnings: ValidationIssue[];
   summary: {
     roles: number;
@@ -112,6 +169,8 @@ export interface OntologyPayload {
     flows: number;
     state_machines: number;
     entities: number;
+    playbooks: number;
+    tools: number;
     warnings: number;
   };
 }

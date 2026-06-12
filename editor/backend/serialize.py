@@ -21,8 +21,10 @@ from exploder import (  # type: ignore[import-not-found]
     ResolvedEntity,
     ResolvedEvent,
     ResolvedFlow,
+    ResolvedPlaybook,
     ResolvedRole,
     ResolvedStateMachine,
+    ResolvedTool,
     ValidationIssue,
 )
 from scont_bodies import AxiomBody  # type: ignore[import-not-found]
@@ -36,6 +38,8 @@ def serialize_ontology(ontology: Ontology) -> dict[str, Any]:
         "flows": [_flow(f) for f in ontology.flows.values()],
         "state_machines": [_state_machine(s) for s in ontology.state_machines.values()],
         "entities": [_entity(e) for e in ontology.entities.values()],
+        "playbooks": [_playbook(p) for p in ontology.playbooks.values()],
+        "tools": [_tool(t) for t in ontology.tools.values()],
         "warnings": [_warning(w) for w in ontology.warnings],
         "summary": {
             "roles": len(ontology.roles),
@@ -43,6 +47,8 @@ def serialize_ontology(ontology: Ontology) -> dict[str, Any]:
             "flows": len(ontology.flows),
             "state_machines": len(ontology.state_machines),
             "entities": len(ontology.entities),
+            "playbooks": len(ontology.playbooks),
+            "tools": len(ontology.tools),
             "warnings": len(ontology.warnings),
         },
     }
@@ -122,6 +128,58 @@ def _entity(e: ResolvedEntity) -> dict[str, Any]:
         "attributes": sorted(e.attributes.keys()),
         "rule_count": len(e.rules),
         "metrics": [m.name for m in e.metrics],
+    }
+
+
+def _playbook(p: ResolvedPlaybook) -> dict[str, Any]:
+    b = p.body
+    return {
+        "name": p.name,
+        "domain": p.domain,
+        "subdomain": p.subdomain,
+        "role": b.role,
+        "triggered_by": b.triggered_by,
+        "input_quantum": b.input_quantum,
+        "synchronization": _enum(b.synchronization),
+        "closed_set": b.closed_set,
+        "context_assembly": [
+            {
+                "flow": step.flow,
+                "required": step.required,
+                "inputs_from_quantum": [
+                    {"param": bnd.param, "from_quantum": bnd.from_quantum}
+                    for bnd in (step.inputs_from_quantum or [])
+                ],
+            }
+            for step in (b.context_assembly or [])
+        ],
+        "decision": {
+            "criteria_refs": list(b.decision.criteria_refs or []),
+            "selects_one_of": list(b.decision.selects_one_of or []),
+        }
+        if b.decision
+        else None,
+        "always_fires": [
+            {"event": af.event, "flow": af.flow} for af in (b.always_fires or [])
+        ],
+        "llm_prompt_hint": p.llm_prompt_hint,
+    }
+
+
+def _tool(t: ResolvedTool) -> dict[str, Any]:
+    b = t.body
+    return {
+        "name": t.name,
+        "domain": t.domain,
+        "subdomain": t.subdomain,
+        "description": b.description,
+        "category": _enum(b.category),
+        "input_class": b.input_class,
+        "output_class": b.output_class,
+        "implementation": b.implementation,
+        "deterministic": b.deterministic,
+        "available_to": list(b.available_to or []),
+        "llm_prompt_hint": t.llm_prompt_hint,
     }
 
 

@@ -1,7 +1,7 @@
 import type { Entity, OntologyPayload } from '../../api/types';
 import type { Selection } from '../../store/ontology';
 import { Chip } from '../Chip';
-import { flowsCarryingEntity, flowsReturningEntity } from './helpers';
+import { flowsCarryingEntity, flowsReturningEntity, toolsTouchingEntity } from './helpers';
 import { ChipList, PanelHeader, Row, Section } from './shared';
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
 export function EntityPanel({ entity, data, onNavigate }: Props) {
   const carriedBy = flowsCarryingEntity(data, entity.name);
   const returnedBy = flowsReturningEntity(data, entity.name);
+  const tools = toolsTouchingEntity(data, entity.name);
 
   return (
     <article className="panel panel--entity">
@@ -59,6 +60,23 @@ export function EntityPanel({ entity, data, onNavigate }: Props) {
             {returnedBy.map((f) => (
               <Chip key={f.name} kind="flow" onClick={() => onNavigate({ kind: 'flow', id: f.name })}>
                 {f.name}
+              </Chip>
+            ))}
+          </ChipList>
+        </Section>
+      )}
+
+      {tools.length > 0 && (
+        <Section title={`tool i/o (${tools.length})`}>
+          <ChipList>
+            {tools.map((t) => (
+              <Chip
+                key={t.name}
+                kind="tool"
+                onClick={() => onNavigate({ kind: 'tool', id: t.name })}
+                title={t.input_class === entity.name ? 'input' : 'output'}
+              >
+                {t.name}
               </Chip>
             ))}
           </ChipList>

@@ -7,6 +7,7 @@ const TABS: Array<{ id: ScreenId | 'authoring'; num: string; label: string; disa
   { id: 'cascade', num: '02', label: 'cascade' },
   { id: 'authoring', num: '03', label: 'authoring', disabled: true, title: 'deferred — mockup only' },
   { id: 'fsm', num: '04', label: 'fsm' },
+  { id: 'playbook', num: '05', label: 'playbook' },
 ];
 
 export function AppHeader() {

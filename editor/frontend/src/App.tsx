@@ -11,6 +11,7 @@ import { ContextPanel } from './components/ContextPanel';
 import { StructureScreen } from './screens/Structure';
 import { CascadeScreen } from './screens/Cascade';
 import { FSMScreen } from './screens/FSM';
+import { PlaybookScreen } from './screens/Playbook';
 import './App.css';
 
 export default function App() {
@@ -90,6 +91,8 @@ function ScreenRouter({ data }: { data: import('./api/types').OntologyPayload })
       return <CascadeScreen data={data} />;
     case 'fsm':
       return <FSMScreen data={data} />;
+    case 'playbook':
+      return <PlaybookScreen data={data} />;
   }
 }
 
