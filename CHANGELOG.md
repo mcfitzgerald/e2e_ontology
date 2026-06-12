@@ -6,6 +6,75 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### 2026-06-05 — Editor: surface Playbook + Tool constructs (Phase I.4)
+
+The Playbook and Tool meta-constructs (added to the schema at Phase 1.8) reached
+the visual editor — previously they were silently dropped on the way to the
+frontend.
+
+- **Backend.** `editor/backend/serialize.py` now emits `playbooks` (`_playbook`)
+  and `tools` (`_tool`) collections + their summary counts from the resolved
+  ontology (`ResolvedPlaybook` / `ResolvedTool`).
+- **Frontend.** New `PlaybookPanel` and `ToolPanel` detail panels and a dedicated
+  `screens/Playbook/` screen (router case wired from `App.tsx`). The playbook's
+  `selects_one_of` list renders neutralized — order carries no priority
+  (`agent_system_design.md` §2 / §6.1).
+- **Parity test.** `tests/test_editor_serialize.py` locks the Playbook/Tool
+  serialization shape so the constructs can't silently drift back out.
+- **Housekeeping.** `.gitignore` now excludes the generated `docs/` (gen-doc
+  output) and `claude_plans/` scratch.
+
+### 2026-06-05 — Phase B: 7-O ontology knowledge-MCP (read-the-model)
+
+The interactive form of the CSCO's Q1 answer ("what is the ontology, and is it
+legible?"): a read-only MCP surface (`mcp_server/`) over the Ontology Service to
+read + traverse the supply-chain STRUCTURE — roles, flows, quanta, events,
+playbooks, tools. Distinct from **7-S** (the orchestrator front door): 7-S drives
+the system (ingress + read a run's event log); **7-O** reads the MODEL — it wraps
+the Ontology Service, reusing none of 7-S's ingress (no event log, no scenario
+registry, no agent dispatch), and mirrors the 7-S core/server split exactly.
+
+- **`mcp_server/core.py`** (`OntologyKnowledgeService`, unit-tested against the
+  real service): `model_summary`; `read_role/flow/quantum/playbook`; `traverse`
+  (one hop) + `impact_analysis` (transitive structural closure) over a generic
+  ontology-graph adjacency (no per-element code); `walk_flow_chain`. Resources:
+  `ontology://source`, `narrative://demo`, `roleview://{role}`, `docs://{name}`.
+- **Headline DoD.** `impact_analysis("TradePromotion", "slip_one_week")` answers
+  "if Megalomart's promo slips a week, who's affected?" — lights up the whole
+  resolution cast (trade / supply_planning / customer_development + the playbook,
+  flows, events, tools, quanta) from STRUCTURE, no run.
+- **API correction vs. the seed.** Uses `mcp.server.fastmcp.FastMCP` (the official
+  mcp SDK's bundled FastMCP, the house pattern), NOT standalone `fastmcp` v3.x.
+  The seed's `walk_scenario` was orchestrator-coupled → recast as `walk_flow_chain`,
+  purely ontological, so 7-O never inverts the ontology→orchestrator dependency.
+- **§2.** `impact` returns an UNRANKED structural set (ordering impact = policy =
+  the client's judgment); playbooks surface decision criteria, never weighting.
+  Read-only, no per-element code, no API key. +12 tests (281), incl. in-memory
+  `ClientSession` round-trip. Adds `mcp>=1.2` dep + the `e2e-ontology-mcp` entry point.
+
+### 2026-06-05 — Phase A3: balanced world-state variant (K1 — CA-L1 as a grounded alt line)
+
+Adds `world_state_balanced.yaml`: `world_state.yaml` + the K1 delta ONLY, so a
+live agent can resolve the NJ-L1 capacity conflict by INTERNAL re-plan (exercising
+`plant_scheduler`), not only by promo revision. The canonical fixture is
+determinate — only NJ-L1 runs the flagship and it's maxed — which is why every
+Phase-A live run correctly converged to `request_promo_revision`; the balanced
+variant makes a second lever genuinely viable so the resolution can vary by seed.
+
+- **K1 delta (CA-L1).** `committed_load` 46000 → 45000 (available 4000 → 5000; util
+  92% → 90%); two small TP-FLAG-6OZ schedule rows (weeks 140 & 147, 400/wk) so
+  `query_plants_for_sku` surfaces CA-L1 as qualified for the flagship. After:
+  CA-L1 scheduled 3100, free residual 1900 ≥ 1500 shortfall → internal re-plan to
+  CA-L1 is feasible on capacity.
+- **Why CA-L1, not the seed's NJ-L2.** NJ-L2 is a mouthwash line, so flagship
+  toothpaste there fails CSCO credibility; CA-L1 already runs toothpaste. PLANT-CA's
+  10-day mfg lead is no blocker (today=100, window 140-146). NJ-L1's 5000-residual /
+  1500-shortfall invariant and the Seed-A baseline are untouched.
+- **K2 (contractually-locked promo) is NOT here** — promo flexibility on the
+  capacity-resolution path is answered by a boundary responder, not read from
+  world_state, so K2 is an orchestrator-side responder variant (no second fixture
+  → no drift). Adds `WORLD_STATE_BALANCED_YAML` to `paths` + exports it.
+
 ### 2026-06-04 — residual-capacity model (line-magnitude realism); Seed Phase A2, Session 1
 
 Closes the Phase-A "toy line" credibility hole: a line that makes 6,500 cases/wk
